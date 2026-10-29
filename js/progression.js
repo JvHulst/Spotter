@@ -51,12 +51,13 @@ export function snapToGrid(fromKg, targetLoad, ex, bodyweight, { round = Math.ro
  * Plan today's working sets for one exercise.
  *
  * history: earlier sessions with this exercise, oldest first, as {date, sets} with working
- * sets only. target: {reps: [low, high], rir: [low, high]}. bodyweightAt(date) returns kg.
+ * sets only. target: {reps: [low, high], rir: [low, high]}. bodyweight is in kg.
  * Returns {mode, sets: [{kg, reps}], rir, reason}; kg is null when there is no history.
  * Modes: "new" (no history), "return" (long gap), "up" (add load), "reps" (add reps at the
- * same load), and "down" (below the rep range last time).
+ * same load), and "down" (below the rep range last time). An exercise without a load increment,
+ * and a bodyweight exercise done without added weight, progresses by reps only, beyond the range.
  */
-export function planExercise({ ex, target, history, nSets, today, bodyweightAt }) {
+export function planExercise({ ex, target, history, nSets, today, bodyweight: bw }) {
   const [lo, hi] = target.reps;
   const [rirLo, rirHi] = target.rir;
   const mid = Math.floor((lo + hi) / 2);
@@ -68,9 +69,7 @@ export function planExercise({ ex, target, history, nSets, today, bodyweightAt }
       reason: `New exercise: choose a weight for ${mid} reps with ${rirHi} in reserve` };
   }
 
-  const bwLast = bodyweightAt(last.date);
-  const bw = bodyweightAt(today);
-  const loads = last.sets.map((s) => effectiveLoad(s.kg, ex, bwLast));
+  const loads = last.sets.map((s) => effectiveLoad(s.kg, ex, bw));
   const topLoad = Math.max(...loads);
   const top = last.sets.filter((_, i) => loads[i] >= topLoad - 1e-9);
   const topKg = top[0].kg;
@@ -90,8 +89,9 @@ export function planExercise({ ex, target, history, nSets, today, bodyweightAt }
       reason: `${away} since last time: ${change > 0 ? `${change}% lighter` : "same weight"}, ${reps} reps at RIR ${rirHi}` };
   }
 
+  const byLoad = ex.increment > 0 && !(ex.load === "add" && topKg === 0);
   const qualifies = (s) => s.reps >= hi && (s.rir == null || s.rir >= rirLo);
-  if (ex.increment > 0 && top.every(qualifies)) {
+  if (byLoad && top.every(qualifies)) {
     const kg = round2(topKg + heavier(ex) * ex.increment);
     const reps = clamp(Math.floor(repsFor(strength, effectiveLoad(kg, ex, bw), rirLo)), lo, hi);
     const withRir = top.some((s) => s.rir != null) ? ` with RIR ≥ ${rirLo}` : "";
@@ -99,7 +99,7 @@ export function planExercise({ ex, target, history, nSets, today, bodyweightAt }
       reason: `${heavier(ex) > 0 ? "+" : "−"}${ex.increment} kg: every set reached ${hi} reps${withRir}` };
   }
 
-  if (ex.increment > 0 && Math.max(...top.map((s) => s.reps)) < lo) {
+  if (byLoad && Math.max(...top.map((s) => s.reps)) < lo) {
     const kg = Math.max(0, round2(topKg - heavier(ex) * ex.increment));
     return { mode: "down", sets: sets(kg, lo), rir: rirLo,
       reason: `Below ${lo} reps last time: ${ex.increment} kg lighter` };
@@ -109,9 +109,9 @@ export function planExercise({ ex, target, history, nSets, today, bodyweightAt }
   const reps = Array.from({ length: nSets }, (_, i) => {
     const s = top[Math.min(i, top.length - 1)];
     const next = s.reps + (s.rir != null && s.rir < rirLo ? 0 : 1);
-    return ex.increment > 0 ? Math.min(hi, next) : next;
+    return byLoad ? Math.min(hi, next) : next;
   });
-  const reason = !ex.increment ? "Same load: one more rep per set"
+  const reason = !byLoad ? "Same load: one more rep per set"
     : top.every((s) => s.reps >= hi) ? `Same weight: reach ${hi} reps with RIR ≥ ${rirLo} before adding load`
     : `Same weight: one more rep per set, up to ${hi}`;
   return { mode: "reps", sets: sets(topKg, reps), rir: rirLo, reason };

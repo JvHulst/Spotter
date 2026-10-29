@@ -1,9 +1,12 @@
 // The workout screen: one card per exercise with its sets. The focused set opens an editor
 // with steppers for weight and reps and chips for RIR.
 
-import { state, exercise, pattern, template, targetFor, saveActive } from "../state.js";
-import { logSet, addSet, removeExercise, swapExercise, addExercise, toggleSuperset, finishWorkout, discardWorkout } from "../workout.js";
-import { actions, ask, esc, fmtKg, ago, setsText, icon, toast } from "../ui.js";
+import { state, exercise, bodyweight, saveActive } from "../state.js";
+import { template, targetFor, alternatives } from "../program.js";
+import { exerciseSeries, stalled } from "../history.js";
+import { logSet, undoSet, setEdited, addSet, removeSet, removeExercise, swapExercise, addExercise, toggleSuperset,
+  saveAsTemplate, updateTemplate, finishWorkout, discardWorkout } from "../workout.js";
+import { actions, ask, esc, fmtKg, ago, setsText, icon, toast, plural } from "../ui.js";
 import { openSheet, closeSheet } from "./sheet.js";
 
 export function workoutView() {
@@ -15,8 +18,11 @@ export function workoutView() {
   const list = a.exercises;
   const cards = list.map((entry, e) => card(entry, e) + (e < list.length - 1 ? linkButton(e) : "")).join("");
   const body = `
-    ${cards}
-    <button class="btn block" style="margin-top:12px" data-action="add-exercise">+ Add exercise</button>
+    ${list.length ? cards : `<div class="empty">Add the exercises of this workout as you go.</div>`}
+    <button class="btn block ${list.length ? "" : "primary"}" style="margin-top:12px" data-action="add-exercise">+ Add exercise</button>
+    ${!list.length ? "" : template(a.template)?.custom
+      ? `<button class="btn block" style="margin-top:8px" data-action="update-template">Update template</button>`
+      : `<button class="btn block" style="margin-top:8px" data-action="save-template">Save as template</button>`}
     <button class="btn block danger" style="margin-top:8px" data-action="discard">Discard workout</button>`;
   return {
     title: a.name, mainClass: "workout", body,
@@ -29,7 +35,10 @@ function card(entry, e) {
   const target = targetFor(entry.ex);
   const slot = template(state.active.template)?.slots.find((s) => s.id === entry.slot);
   const work = entry.sets.filter((s) => !s.warmup).length;
-  const last = state.index.get(entry.ex)?.at(-1);
+  const history = state.index.get(entry.ex) ?? [];
+  const last = history.at(-1);
+  const started = entry.sets.some((s) => s.done && !s.warmup);
+  const stall = !started && stalled(exerciseSeries(history, ex, bodyweight()));
   let n = 0;
   const rows = entry.sets.map((set, s) => {
     const label = set.warmup ? "W" : ++n;
@@ -41,8 +50,8 @@ function card(entry, e) {
           <span class="val num">${fmtKg(set.kg)} kg × ${set.reps}</span>
           <span class="rir">${!set.warmup && set.rir != null ? `RIR ${set.rir}${set.rir === 4 ? "+" : ""}` : ""}</span>
         </button>
-        <button class="tick" data-action="tick" data-e="${e}" data-s="${s}" aria-label="${set.done ? "Edit set" : "Log set as shown"}">${set.done ? icon.check : ""}</button>
-      </div>${focused ? editor(entry, set, e, s) : ""}`;
+        <button class="tick" data-action="tick" data-e="${e}" data-s="${s}" aria-label="${set.done ? "Undo set" : "Log set as shown"}">${set.done ? icon.check : ""}</button>
+      </div>${focused ? editor(set, e, s) : ""}`;
   }).join("");
   return `
     <section class="ex-card ${entry.superset || state.active.exercises[e - 1]?.superset ? "superset" : ""}">
@@ -51,6 +60,7 @@ function card(entry, e) {
         <button class="name" data-action="swap" data-e="${e}">${esc(ex.name)} ${icon.swap}</button>
         <div class="last">${last ? `${ago(last.date)}: ${esc(setsText(last.sets))}` : "No history yet"}</div>
         <div class="reason mode-${entry.plan.mode}">${esc(entry.plan.reason)}</div>
+        ${started ? "" : altChips(entry, e, slot, stall)}
       </div>
       ${rows}
       <div class="ex-foot">
@@ -63,7 +73,19 @@ function card(entry, e) {
     </section>`;
 }
 
-function editor(entry, set, e, s) {
+/** One-tap swaps to the slot's other exercises, shown until the first working set is logged.
+ *  After four sessions without a better estimate, the row suggests a change of exercise. */
+function altChips(entry, e, slot, stall) {
+  const others = alternatives(entry.ex, slot, state.active.exercises.map((x) => x.ex));
+  if (!others.length) return "";
+  const chips = others.map((id) =>
+    `<button class="chip" data-action="alt" data-e="${e}" data-id="${id}">${esc(exercise(id).name)}</button>`).join("");
+  return `
+    ${stall ? `<div class="small stall">No new best in 4 sessions: a different exercise may get you moving again.</div>` : ""}
+    <div class="chips alts">${chips}<button class="chip" data-action="swap" data-e="${e}">More…</button></div>`;
+}
+
+function editor(set, e, s) {
   const rir = [0, 1, 2, 3, 4].map((r) =>
     `<button class="${set.rir === r ? "on" : ""}" data-action="rir" data-e="${e}" data-s="${s}" data-r="${r}">${r === 4 ? "4+" : r}</button>`).join("");
   const stepper = (field, value) => `
@@ -79,7 +101,10 @@ function editor(entry, set, e, s) {
         <div><div class="field-label">Reps</div>${stepper("reps", set.reps)}</div>
       </div>
       ${set.warmup ? "" : `<div class="field-label">Reps in reserve</div><div class="rir-chips">${rir}</div>`}
-      <button class="btn primary block" data-action="log" data-e="${e}" data-s="${s}">${set.done ? "Save changes" : set.warmup ? "Done" : "Log set"}</button>
+      <div class="row" style="margin-top:12px">
+        <button class="btn small" data-action="remove-set" data-e="${e}" data-s="${s}">Remove set</button>
+        <button class="btn primary grow" data-action="log" data-e="${e}" data-s="${s}">${set.done ? "Save changes" : set.warmup ? "Done" : "Log set"}</button>
+      </div>
     </div>`;
 }
 
@@ -90,12 +115,17 @@ function linkButton(e) {
 
 const setAt = ({ e, s }) => state.active.exercises[+e].sets[+s];
 
-actions.focus = ({ e, s }) => { state.active.focus = { e: +e, s: +s }; return saveActive(); };
-// The tick logs a set with the values shown in one tap. A logged set, or a set still
-// without a weight, opens in the editor instead.
+actions.focus = ({ e, s }) => {
+  const same = state.active.focus?.e === +e && state.active.focus?.s === +s;
+  state.active.focus = same && setAt({ e, s }).done ? null : { e: +e, s: +s };
+  return saveActive();
+};
+// The tick logs a set with the values shown in one tap, and a second tap undoes it. A set still
+// without a weight opens in the editor instead.
 actions.tick = (d) => {
   const set = setAt(d);
-  if (set.done || set.kg == null) return actions.focus(d);
+  if (set.done) return undoSet(+d.e, +d.s);
+  if (set.kg == null) return actions.focus(d);
   return logSet(+d.e, +d.s);
 };
 actions.step = (d) => {
@@ -118,10 +148,11 @@ actions.rir = (d) => { setAt(d).rir = +d.r; return saveActive(); };
 actions.log = async (d) => {
   if (setAt(d).done) {
     state.active.focus = null;
-    return saveActive();
+    return setEdited(+d.e);
   }
   return logSet(+d.e, +d.s);
 };
+actions["remove-set"] = ({ e, s }) => removeSet(+e, +s);
 actions["add-set"] = ({ e }) => addSet(+e);
 actions["remove-exercise"] = async ({ e }) => {
   if (await ask("Remove this exercise from today's workout?", { ok: "Remove", danger: true })) return removeExercise(+e);
@@ -134,14 +165,15 @@ actions.note = async ({ e }) => {
   entry.note = note.trim();
   return saveActive();
 };
+actions.alt = ({ e, id }) => swapExercise(+e, id);
 actions.swap = ({ e }) => {
   const entry = state.active.exercises[+e];
   const slot = template(state.active.template)?.slots.find((s) => s.id === entry.slot);
+  const inWorkout = state.active.exercises.map((x) => x.ex);
   openSheet({
     title: "Swap exercise",
-    first: (slot?.options ?? []).filter((id) => id !== entry.ex),
-    firstTitle: "Used in this slot",
-    pattern: pattern(entry.ex).label, patternId: exercise(entry.ex).pattern,
+    first: alternatives(entry.ex, slot, inWorkout, 12),
+    firstTitle: "Alternatives",
     exclude: [entry.ex],
     pick: async (id) => {
       if (entry.sets.some((s) => s.done && !s.warmup)
@@ -152,13 +184,25 @@ actions.swap = ({ e }) => {
   });
 };
 actions["add-exercise"] = () => openSheet({
-  title: "Add exercise", first: [], exclude: [],
+  title: "Add exercise", first: [], exclude: state.active.exercises.map((x) => x.ex),
   pick: async (id) => { await addExercise(id); closeSheet(); },
 });
+actions["save-template"] = async () => {
+  const name = await ask("Name of the new template", { ok: "Save", text: state.active.template ? `${state.active.name} (copy)` : "My workout" });
+  if (!name?.trim()) return;
+  await saveAsTemplate(name.trim());
+  toast(`Saved as template "${name.trim()}"`);
+};
+actions["update-template"] = async () => {
+  if (!(await ask(`Make the template "${state.active.name}" match this workout's exercises and sets?`, { ok: "Update" }))) return;
+  await updateTemplate();
+  toast("Template updated");
+};
 actions.finish = async () => {
   if (!(await ask("Finish and save this workout?", { ok: "Finish" }))) return;
   const session = await finishWorkout();
-  toast(session ? "Workout saved" : "Nothing logged, workout closed");
+  const prs = session ? state.records.get(session.id)?.length ?? 0 : 0;
+  toast(!session ? "Nothing logged, workout closed" : prs ? `Workout saved with ${plural(prs, "record")}` : "Workout saved");
   location.hash = session ? `#session-${session.id}` : "#today";
 };
 actions.discard = async () => {

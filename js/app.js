@@ -2,18 +2,20 @@
 
 import { state, loadState, saveActive } from "./state.js";
 import { persist } from "./db.js";
-import { actions, esc, icon, fmtClock } from "./ui.js";
-import { today } from "./views/today.js";
+import { actions, esc, icon, fmtClock, showTip } from "./ui.js";
+import { today, templateView, settingsLink } from "./views/today.js";
 import { workoutView } from "./views/workout-view.js";
 import { historyView, sessionView } from "./views/log.js";
 import { libraryView, exerciseView } from "./views/library-view.js";
 import { musclesView } from "./views/muscles.js";
+import { progressView } from "./views/progress.js";
 import { settingsView, applyTheme } from "./views/settings.js";
+import { startSync } from "./sync.js";
 import { sheetHtml } from "./views/sheet.js";
 
 const root = document.getElementById("app");
-const TABS = [["today", "#today", "Today"], ["log", "#history", "History"], ["library", "#library", "Library"],
-  ["muscles", "#muscles", "Muscles"], ["settings", "#setup", "Settings"]];
+const TABS = [["today", "#today", "Today"], ["log", "#history", "History"], ["progress", "#progress", "Progress"],
+  ["muscles", "#muscles", "Muscles"], ["library", "#library", "Library"]];
 
 // Routes are plain names such as #history, or a name and an id such as #session-<id>.
 function route() {
@@ -25,6 +27,8 @@ function route() {
     case "library": return libraryView();
     case "exercise": return exerciseView(id);
     case "muscles": return musclesView();
+    case "progress": return progressView();
+    case "template": return templateView(id);
     case "setup": return settingsView();
     default: return today();
   }
@@ -38,7 +42,7 @@ export function render() {
   root.innerHTML = `
     <header class="top">
       ${view.back ? `<a class="back" href="${view.back}">‹ Back</a>` : ""}
-      <h1 class="ellipsis">${esc(view.title)}</h1>${view.right ?? ""}
+      <h1 class="ellipsis">${esc(view.title)}</h1>${view.right ?? (view.tab ? settingsLink() : "")}
     </header>
     <main class="${view.mainClass ?? ""}">${view.body}</main>
     ${nav}
@@ -58,6 +62,9 @@ async function dispatch(name, el, event) {
 
 document.addEventListener("click", (event) => {
   unlockAudio();
+  document.querySelector(".tip")?.remove();
+  const tip = event.target.closest("[data-tip]");
+  if (tip) return showTip(tip);
   const el = event.target.closest("[data-action]");
   if (!el || (el.dataset.self && event.target !== el)) return;
   event.preventDefault();
@@ -70,6 +77,10 @@ document.addEventListener("change", (event) => {
 document.addEventListener("input", (event) => {
   const el = event.target.closest("[data-input]");
   if (el) dispatch(el.dataset.input, el, event);
+});
+// Data from another device arrived; redraw unless the user is typing or in a workout.
+window.addEventListener("spotter-synced", () => {
+  if (location.hash !== "#workout" && !document.activeElement?.matches("input, textarea")) render();
 });
 window.addEventListener("hashchange", () => {
   window.scrollTo(0, 0);
@@ -176,4 +187,5 @@ applyTheme();
 render();
 updateWakeLock();
 persist();
+startSync();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

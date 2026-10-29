@@ -1,13 +1,14 @@
 // Service worker: keeps the app usable offline. Files are served from the cache and refreshed
 // from the network in the background, so a new version is picked up on the next launch.
 
-const CACHE = "spotter-v1";
+const CACHE = "spotter-v2";
 const SHELL = [
   "./", "index.html", "manifest.webmanifest", "css/app.css",
-  "js/app.js", "js/db.js", "js/history.js", "js/library.js", "js/progression.js", "js/state.js", "js/ui.js", "js/workout.js",
-  "js/views/library-view.js", "js/views/log.js", "js/views/muscles.js", "js/views/settings.js", "js/views/sheet.js",
-  "js/views/today.js", "js/views/workout-view.js",
-  "data/exercises.csv", "data/patterns.csv", "icons/icon.svg", "icons/icon-180.png", "icons/icon-192.png",
+  "js/app.js", "js/charts.js", "js/db.js", "js/history.js", "js/library.js", "js/program.js", "js/progression.js",
+  "js/state.js", "js/strong.js", "js/sync.js", "js/ui.js", "js/workout.js",
+  "js/views/library-view.js", "js/views/log.js", "js/views/muscles.js", "js/views/progress.js", "js/views/settings.js",
+  "js/views/sheet.js", "js/views/today.js", "js/views/workout-view.js",
+  "data/exercises.csv", "data/patterns.csv", "data/splits.json", "icons/icon.svg", "icons/icon-180.png", "icons/icon-192.png",
 ];
 
 self.addEventListener("install", (event) => {

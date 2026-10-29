@@ -1,10 +1,20 @@
-// History: logged sessions by month, and the detail of one session.
+// History: logged sessions by month with their exercises and best sets, and the page of one
+// session, which can also be edited.
 
-import { state, exercise, reindex } from "../state.js";
-import { sessionStore } from "../db.js";
-import { actions, ask, esc, fmtDate, fmtKg, plural, toast } from "../ui.js";
+import { state, exercise, bodyweight, saveSessions, deleteSession } from "../state.js";
+import { working, volumeOf, bestSet } from "../history.js";
+import { actions, ask, esc, fmtDate, fmtKg, plural, toast, RECORD_LABEL } from "../ui.js";
+import { openSheet, closeSheet } from "./sheet.js";
 
-const PAGE = 40;
+const PAGE = 30;
+const time = (d) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+/** A set in words: "100 kg × 5", "+10 kg × 8" for added weight, "12 reps" without weight. */
+function setText(s, ex) {
+  if (!s) return "";
+  if (!s.kg) return `${s.reps} reps`;
+  return `${ex?.load === "add" ? "+" : ex?.load === "subtract" ? "−" : ""}${fmtKg(s.kg)} kg × ${s.reps}`;
+}
 
 export function historyView() {
   const shown = state.sessions.slice().reverse().slice(0, state.ui.historyLimit ?? PAGE);
@@ -15,21 +25,28 @@ export function historyView() {
     const date = new Date(s.start);
     const m = fmtDate(date, { month: "long", year: "numeric" });
     if (m !== month) {
-      if (month) parts.push("</div>");
-      parts.push(`<div class="eyebrow section-title">${esc(m)}</div><div class="list">`);
+      parts.push(`<div class="eyebrow section-title">${esc(m)}</div>`);
       month = m;
     }
-    const sets = s.exercises.reduce((n, e) => n + e.sets.filter((x) => !x.warmup).length, 0);
+    const sets = s.exercises.flatMap((e) => working(e.sets));
+    const prs = state.records.get(s.id)?.length ?? 0;
+    const lines = s.exercises.map((e) => {
+      const ex = exercise(e.ex);
+      const work = working(e.sets);
+      return `<div class="hist-line"><span class="ellipsis">${work.length} × ${esc(ex?.name ?? e.ex)}</span>
+        <span class="num muted">${esc(setText(ex && bestSet(work, ex, bodyweight()), ex))}</span></div>`;
+    }).join("");
     parts.push(`
-      <a href="#session-${encodeURIComponent(s.id)}">
-        <div class="grow">
-          <div class="title">${esc(s.name)}</div>
-          <div class="small muted ellipsis">${s.exercises.map((e) => esc(exercise(e.ex)?.name ?? e.ex)).join(" · ")}</div>
+      <a class="card hist" href="#session-${encodeURIComponent(s.id)}">
+        <div class="row">
+          <div class="grow"><b>${esc(s.name)}</b>
+            <div class="small muted">${fmtDate(date)} · ${time(date)}${s.durationMin ? ` · ${s.durationMin} min` : ""}</div></div>
+          ${prs ? `<span class="pr-badge">${plural(prs, "PR")}</span>` : ""}
         </div>
-        <div class="small muted num" style="text-align:right">${fmtDate(date, { weekday: "short", day: "numeric" })}<br>${sets} sets</div>
+        <div class="small muted hist-meta">${plural(sets.length, "working set")} · ${Math.round(volumeOf(sets)).toLocaleString()} kg</div>
+        ${lines}
       </a>`);
   }
-  parts.push("</div>");
   const more = state.sessions.length > shown.length ? `<button class="btn block" data-action="more-history">Show more</button>` : "";
   return { title: "History", tab: "log", body: parts.join("") + more };
 }
@@ -37,38 +54,114 @@ export function historyView() {
 export function sessionView(id) {
   const s = state.sessions.find((x) => x.id === id);
   if (!s) return { title: "Workout", back: "#history", body: `<div class="empty">Workout not found</div>` };
+  const editing = state.ui.editing === id;
   const date = new Date(s.start);
-  const work = s.exercises.flatMap((e) => e.sets.filter((x) => !x.warmup));
-  const volume = work.reduce((v, x) => v + x.kg * x.reps, 0);
-  const cards = s.exercises.map((e) => {
-    let n = 0;
-    const rows = e.sets.map((x) => `
-      <div class="set ${x.warmup ? "warm" : ""}"><div class="set-main">
-        <span class="idx">${x.warmup ? "W" : ++n}</span>
-        <span class="val num">${fmtKg(x.kg)} kg × ${x.reps}</span>
-        <span class="rir">${x.rir != null ? `RIR ${x.rir}` : ""}</span>
-      </div></div>`).join("");
-    return `<section class="ex-card"><div class="ex-head"><a class="name" style="color:inherit;text-decoration:none" href="#exercise-${e.ex}">${esc(exercise(e.ex)?.name ?? e.ex)}</a>
-      ${e.note ? `<div class="small muted">${esc(e.note)}</div>` : ""}</div>${rows}</section>`;
-  }).join("");
-  const body = `
-    <div class="eyebrow" style="margin-top:8px">${fmtDate(date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</div>
+  const work = s.exercises.flatMap((e) => working(e.sets));
+  const prs = state.records.get(id) ?? [];
+  const cards = s.exercises.map((e, i) => (editing ? editCard(e, i) : viewCard(e, prs))).join("");
+  const header = editing ? `
+    <div class="field-label">Name</div>
+    <input class="search" value="${esc(s.name)}" data-change="s-field" data-f="name">
+    <div class="fields" style="margin-top:4px">
+      <div><div class="field-label">Start</div><input class="search" type="datetime-local" value="${s.start.slice(0, 16)}" data-change="s-field" data-f="start"></div>
+      <div><div class="field-label">Minutes</div><input class="search num" inputmode="numeric" value="${s.durationMin ?? ""}" data-change="s-field" data-f="durationMin"></div>
+    </div>` : `
+    <div class="eyebrow" style="margin-top:8px">${fmtDate(date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · ${time(date)}</div>
     <div class="stats">
       <div class="stat"><b class="num">${s.durationMin ?? "–"}</b><span>minutes</span></div>
       <div class="stat"><b class="num">${work.length}</b><span>working sets</span></div>
-      <div class="stat"><b class="num">${Math.round(volume).toLocaleString()}</b><span>kg volume</span></div>
+      <div class="stat"><b class="num">${Math.round(volumeOf(work)).toLocaleString()}</b><span>kg volume</span></div>
     </div>
-    ${cards}
-    ${s.source === "app" ? `<button class="btn block danger" data-action="delete-session" data-id="${esc(s.id)}">Delete workout</button>` : ""}`;
-  return { title: s.name, back: "#history", body };
+    ${prs.length ? `<div class="pr-strip">${plural(prs.length, "personal record")}</div>` : ""}`;
+  const footer = editing ? `
+    <button class="btn block" data-action="s-add-ex">+ Add exercise</button>
+    <button class="btn block danger" style="margin-top:8px" data-action="delete-session" data-id="${esc(id)}">Delete workout</button>` : "";
+  return {
+    title: s.name, back: "#history", body: header + cards + footer,
+    right: `<button class="btn small ${editing ? "primary" : ""}" data-action="s-edit" data-id="${esc(id)}">${editing ? "Done" : "Edit"}</button>`,
+  };
+}
+
+function viewCard(e, prs) {
+  const ex = exercise(e.ex);
+  let n = 0;
+  const mine = prs.filter((r) => r.ex === e.ex);
+  const rows = e.sets.map((x) => `
+    <div class="set ${x.warmup ? "warm" : ""}"><div class="set-main">
+      <span class="idx">${x.warmup ? "W" : ++n}</span>
+      <span class="val num">${fmtKg(x.kg)} kg × ${x.reps}</span>
+      <span class="rir">${x.rir != null ? `RIR ${x.rir}` : ""}</span>
+    </div></div>`).join("");
+  return `<section class="ex-card"><div class="ex-head">
+      <a class="name" style="color:inherit;text-decoration:none" href="#exercise-${e.ex}">${esc(ex?.name ?? e.ex)}</a>
+      ${mine.length ? `<div class="pr-tags">${mine.map((r) => `<span class="pr-badge">${RECORD_LABEL[r.kind]} PR</span>`).join("")}</div>` : ""}
+      ${e.note ? `<div class="small muted">${esc(e.note)}</div>` : ""}</div>${rows}</section>`;
+}
+
+function editCard(e, i) {
+  const field = (s, f, value) => `<input class="cell num" inputmode="decimal" value="${value ?? ""}" placeholder="–" data-change="s-set" data-e="${i}" data-s="${s}" data-f="${f}">`;
+  let n = 0;
+  const rows = e.sets.map((x, s) => `
+    <div class="edit-set">
+      <button class="idx-btn ${x.warmup ? "warm" : ""}" data-action="s-warm" data-e="${i}" data-s="${s}" aria-label="Toggle warm-up">${x.warmup ? "W" : ++n}</button>
+      ${field(s, "kg", x.kg)}<span class="muted">kg ×</span>${field(s, "reps", x.reps)}<span class="muted">RIR</span>${field(s, "rir", x.rir)}
+      <button class="icon-btn" data-action="s-del-set" data-e="${i}" data-s="${s}" aria-label="Remove set">✕</button>
+    </div>`).join("");
+  return `<section class="ex-card"><div class="ex-head"><div class="name">${esc(exercise(e.ex)?.name ?? e.ex)}</div></div>
+    ${rows}
+    <div class="ex-foot"><button class="btn small" data-action="s-add-set" data-e="${i}">+ Set</button><span class="grow"></span>
+      <button class="btn small" data-action="s-del-ex" data-e="${i}">Remove</button></div></section>`;
+}
+
+/** Apply a change to the open session and save it, marking it as edited for sync. */
+async function edit(change) {
+  const s = structuredClone(state.sessions.find((x) => x.id === state.ui.editing));
+  change(s);
+  s.exercises = s.exercises.filter((e) => e.sets.length);
+  s.editedAt = Date.now();
+  await saveSessions([s]);
 }
 
 actions["more-history"] = () => { state.ui.historyLimit = (state.ui.historyLimit ?? PAGE) + PAGE; };
+actions["s-edit"] = ({ id }) => { state.ui.editing = state.ui.editing === id ? null : id; };
+actions["s-field"] = ({ f }, el) => edit((s) => {
+  if (f === "name") s.name = el.value.trim() || s.name;
+  if (f === "start" && el.value) s.start = `${el.value}:00`.slice(0, 19);
+  if (f === "durationMin") s.durationMin = Number.parseInt(el.value, 10) || null;
+});
+actions["s-set"] = ({ e, s: i, f }, el) => edit((s) => {
+  const set = s.exercises[+e].sets[+i];
+  const v = parseFloat(el.value.replace(",", "."));
+  if (f === "rir") {
+    if (Number.isFinite(v)) set.rir = Math.max(0, Math.round(v));
+    else delete set.rir;
+  } else if (Number.isFinite(v)) set[f] = f === "reps" ? Math.round(v) : v;
+});
+actions["s-warm"] = ({ e, s: i }) => edit((s) => {
+  const set = s.exercises[+e].sets[+i];
+  if (set.warmup) delete set.warmup;
+  else set.warmup = true;
+});
+actions["s-del-set"] = ({ e, s: i }) => edit((s) => { s.exercises[+e].sets.splice(+i, 1); });
+actions["s-add-set"] = ({ e }) => edit((s) => {
+  const sets = s.exercises[+e].sets;
+  const last = sets.at(-1);
+  sets.push({ kg: last?.kg ?? 0, reps: last?.reps ?? 8 });
+});
+actions["s-del-ex"] = async ({ e }) => {
+  if (await ask("Remove this exercise and its sets from the workout?", { ok: "Remove", danger: true })) return edit((s) => { s.exercises.splice(+e, 1); });
+};
+actions["s-add-ex"] = () => openSheet({
+  title: "Add exercise", first: [], exclude: [],
+  pick: async (id) => {
+    await edit((s) => { s.exercises.push({ ex: id, sets: [{ kg: 0, reps: 8 }] }); });
+    closeSheet();
+  },
+});
 actions["delete-session"] = async ({ id }) => {
   if (!(await ask("Delete this workout?", { ok: "Delete", danger: true }))) return;
-  state.sessions = state.sessions.filter((x) => x.id !== id);
-  await sessionStore.delete(id);
-  reindex();
+  await deleteSession(id);
+  state.ui.editing = null;
   toast(`Deleted, ${plural(state.sessions.length, "workout")} left`);
   location.hash = "#history";
 };

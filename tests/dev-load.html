@@ -3,39 +3,34 @@
 <title>Load local data</title>
 <pre id="out">loading</pre>
 <script type="module">
-// Development helper: replaces the browser's app data with a local data repository, optionally
-// starts a workout and logs sets, then opens the app.
-//   ?data=../../spotter-data/   folder with program.json, body.json and sessions/
-//   &start=full-body-a           start this training day
-//   &log=3                       log this many sets with their planned values
-//   &goto=%23/library            open this route instead of the workout
+// Development helper: replaces the app data in this browser, optionally starts a workout and
+// logs sets, then opens the app.
+//   ?source=strong     import the Strong export ../../strong_workouts.csv (default)
+//   ?source=backup     store the program, body data and sessions of ../../spotter-import.json
+//                      as they are, as a phone that imported that file holds them
+//   &start=full-body-a start this training day
+//   &log=3             log this many sets with their planned values
+//   &goto=%23library   open this route instead of the workout
 import { kv, sessionStore, clearAll } from "../js/db.js";
-import { loadState } from "../js/state.js";
+import { state, loadState, saveSessions } from "../js/state.js";
+import { parseCsv, strongSessions } from "../js/strong.js";
 import { startWorkout, logSet } from "../js/workout.js";
-import { state } from "../js/state.js";
 
 const params = new URLSearchParams(location.search);
-const base = params.get("data") ?? "../../spotter-data/";
-const get = async (path) => {
-  const res = await fetch(base + path);
-  return res.ok ? res.json() : null;
-};
-
 await clearAll();
-await kv.set("program", await get("program.json"));
-await kv.set("body", (await get("body.json")) ?? []);
-const months = [];
-for (const d = new Date(2020, 0); d <= new Date(); d.setMonth(d.getMonth() + 1)) {
-  months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+if (params.get("source") === "backup") {
+  const doc = await (await fetch("../../spotter-import.json")).json();
+  await Promise.all([kv.set("program", doc.program), kv.set("body", doc.body), sessionStore.putMany(doc.sessions)]);
+  await loadState();
+} else {
+  await loadState();
+  const { sessions } = strongSessions(parseCsv(await (await fetch("../../strong_workouts.csv")).text()), state.library);
+  await saveSessions(sessions);
 }
-const sessions = (await Promise.all(months.map((m) => get(`sessions/${m}.json`)))).filter(Boolean).flat();
-await sessionStore.putMany(sessions);
-
-await loadState();
 if (params.get("start")) {
   await startWorkout(params.get("start"));
   for (let i = 0; i < Number(params.get("log") ?? 0); i++) await logSet(state.active.focus.e, state.active.focus.s);
 }
-document.getElementById("out").textContent = `loaded ${sessions.length} sessions`;
+document.getElementById("out").textContent = `loaded ${state.sessions.length} sessions`;
 location.href = `../index.html${params.get("goto") ?? (params.get("start") ? "#workout" : "#today")}`;
 </script>

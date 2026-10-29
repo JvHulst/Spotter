@@ -24,7 +24,7 @@ export function since(date, now = new Date()) {
   return `${Math.round(days / 30.4)} mo`;
 }
 
-export const fmtDate =(d, opts = { weekday: "short", day: "numeric", month: "short" }) => d.toLocaleDateString(undefined, opts);
+export const fmtDate = (d, opts = { weekday: "short", day: "numeric", month: "short" }) => d.toLocaleDateString(undefined, opts);
 export const fmtClock = (s) => `${s < 0 ? "+" : ""}${Math.floor(Math.abs(s) / 60)}:${String(Math.floor(Math.abs(s) % 60)).padStart(2, "0")}`;
 
 /** "68 kg × 8, 8, 7" when all sets share a weight, else "68×8, 64×9". */
@@ -36,6 +36,8 @@ export function setsText(sets) {
   return rirs.length ? `${body} @ RIR ${rirs.join("/")}` : body;
 }
 
+export const RECORD_LABEL = { e1rm: "Est. 1RM", weight: "Heaviest weight", volume: "Volume" };
+
 const MODE_LABEL = { up: "▲ Heavier", reps: "+ Reps", down: "▼ Lighter", return: "↺ After break", new: "New" };
 export const modeBadge = (mode) => `<span class="badge mode-${mode}">${MODE_LABEL[mode]}</span>`;
 
@@ -45,6 +47,7 @@ export const icon = {
   log: svg("M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"),
   library: svg("M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14zM6.5 17A2.5 2.5 0 0 0 4 19.5 2.5 2.5 0 0 0 6.5 22H20v-5"),
   muscles: svg("M22 12h-4l-3 9L9 3l-3 9H2"),
+  progress: svg("M3 3v18h18M7 14l4-4 3 3 6-7"),
   settings: svg("M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"),
   check: svg("M20 6 9 17l-5-5"),
   swap: svg("m16 3 4 4-4 4M20 7H4M8 21l-4-4 4-4M4 17h16"),
@@ -79,6 +82,15 @@ export function ask(message, { ok = "OK", danger = false, text = null } = {}) {
     document.body.append(bg);
     bg.querySelector("textarea")?.focus();
   });
+}
+
+/** Show an element's data-tip above it until the next tap. */
+export function showTip(el) {
+  const r = el.getBoundingClientRect();
+  const tip = Object.assign(document.createElement("div"), { className: "tip", textContent: el.dataset.tip });
+  document.body.append(tip);
+  tip.style.left = `${Math.min(innerWidth - tip.offsetWidth - 8, Math.max(8, r.left + r.width / 2 - tip.offsetWidth / 2))}px`;
+  tip.style.top = `${r.top + scrollY - tip.offsetHeight - 6}px`;
 }
 
 export function toast(message) {
