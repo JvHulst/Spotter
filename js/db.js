@@ -1,7 +1,7 @@
 // Local storage in IndexedDB. The "sessions" store holds one record per session; the "kv"
 // store holds single documents: program, body, settings and the active workout.
 
-const DB_NAME = "overload";
+const DB_NAME = "spotter";
 let opened;
 
 function open() {
@@ -56,7 +56,7 @@ export const persist = () => navigator.storage?.persist?.().catch(() => false);
 export function classifyImport(docs) {
   const found = { sessions: [] };
   for (const doc of docs) {
-    if (doc?.format === "overload-backup") {
+    if (doc?.format === "spotter-backup") {
       Object.assign(found, { program: doc.program, body: doc.body, settings: doc.settings });
       found.sessions.push(...doc.sessions);
     } else if (doc?.templates) found.program = doc;
@@ -68,5 +68,5 @@ export function classifyImport(docs) {
 }
 
 export function backup({ program, body, sessions, settings }) {
-  return { format: "overload-backup", version: 1, exported: new Date().toISOString(), program, body, settings, sessions };
+  return { format: "spotter-backup", version: 1, exported: new Date().toISOString(), program, body, settings, sessions };
 }

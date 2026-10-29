@@ -1,6 +1,6 @@
 {
-  "name": "Overload",
-  "short_name": "Overload",
+  "name": "Spotter",
+  "short_name": "Spotter",
   "description": "Hypertrophy training log with double progression",
   "start_url": "./",
   "scope": "./",

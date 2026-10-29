@@ -1,6 +1,6 @@
-"""Build an Overload data repository from a Strong export and a Fitbit export.
+"""Build a Spotter data repository from a Strong export and a Fitbit export.
 
-The data repository is the private store that the app syncs with:
+The data repository is the private store of the app's data:
 
     program.json           splits, their training days (templates), per-exercise targets
     sessions/YYYY-MM.json  logged workouts, one file per month, one session per line
@@ -11,7 +11,7 @@ in the app. program.json is written only when it is missing, so edits made in th
 survive; pass --rebuild-program to derive it from the Strong log again.
 
 Usage:
-    python tools/import_data.py --strong ../strong_workouts.csv --fitbit ../Fitbit --out ../overload-data
+    python tools/import_data.py --strong ../strong_workouts.csv --fitbit ../Fitbit --out ../spotter-data --bundle ../spotter-import.json
 """
 import argparse
 import json
@@ -357,7 +357,7 @@ def write_bundle(out, path):
     def read(name):
         return json.loads((out / name).read_text(encoding="utf-8")) if (out / name).exists() else None
     sessions = [s for f in sorted((out / "sessions").glob("*.json")) for s in json.loads(f.read_text(encoding="utf-8"))]
-    bundle = {"format": "overload-backup", "version": 1, "program": read("program.json"),
+    bundle = {"format": "spotter-backup", "version": 1, "program": read("program.json"),
               "body": read("body.json") or [], "sessions": sessions}
     path.write_text(json.dumps(bundle, separators=(",", ":")), encoding="utf-8")
 

@@ -79,7 +79,7 @@ actions.import = async (_, input) => {
 
 actions.export = async () => {
   const data = JSON.stringify(backup(state));
-  const name = `overload-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  const name = `spotter-backup-${new Date().toISOString().slice(0, 10)}.json`;
   const file = new File([data], name, { type: "application/json" });
   if (navigator.canShare?.({ files: [file] })) {
     await navigator.share({ files: [file] }).catch(() => {});

@@ -5,7 +5,7 @@
 <script type="module">
 // Development helper: replaces the browser's app data with a local data repository, optionally
 // starts a workout and logs sets, then opens the app.
-//   ?data=../../overload-data/   folder with program.json, body.json and sessions/
+//   ?data=../../spotter-data/   folder with program.json, body.json and sessions/
 //   &start=full-body-a           start this training day
 //   &log=3                       log this many sets with their planned values
 //   &goto=%23/library            open this route instead of the workout
@@ -15,7 +15,7 @@ import { startWorkout, logSet } from "../js/workout.js";
 import { state } from "../js/state.js";
 
 const params = new URLSearchParams(location.search);
-const base = params.get("data") ?? "../../overload-data/";
+const base = params.get("data") ?? "../../spotter-data/";
 const get = async (path) => {
   const res = await fetch(base + path);
   return res.ok ? res.json() : null;

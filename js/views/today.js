@@ -7,7 +7,7 @@ import { slotChoice, sessionsWithin } from "../history.js";
 import { actions, esc, fmtKg, since, modeBadge } from "../ui.js";
 
 export function today() {
-  if (!state.program) return { title: "Overload", tab: "today", body: onboarding() };
+  if (!state.program) return { title: "Spotter", tab: "today", body: onboarding() };
   const suggested = suggestedTemplateId();
   const t = template(rotation().includes(state.ui.day) ? state.ui.day : suggested);
   const last = state.sessions.at(-1);
@@ -75,9 +75,9 @@ function splitList() {
 function onboarding() {
   return `
     <section class="card">
-      <h2>Welcome to Overload</h2>
+      <h2>Welcome to Spotter</h2>
       <p class="muted">Load your program and training history to get started. In Settings, choose
-      <b>Import files</b> and select <code>overload-import.json</code>, or <code>program.json</code>,
+      <b>Import files</b> and select <code>spotter-import.json</code>, or <code>program.json</code>,
       <code>body.json</code> and the files in <code>sessions/</code> from your data folder.</p>
       <a class="btn primary block" href="#setup">Go to Settings</a>
     </section>`;
