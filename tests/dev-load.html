@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Load local data</title>
+<pre id="out">loading</pre>
+<script type="module">
+// Development helper: replaces the browser's app data with a local data repository, optionally
+// starts a workout and logs sets, then opens the app.
+//   ?data=../../overload-data/   folder with program.json, body.json and sessions/
+//   &start=full-body-a           start this training day
+//   &log=3                       log this many sets with their planned values
+//   &goto=%23/library            open this route instead of the workout
+import { kv, sessionStore, clearAll } from "../js/db.js";
+import { loadState } from "../js/state.js";
+import { startWorkout, logSet } from "../js/workout.js";
+import { state } from "../js/state.js";
+
+const params = new URLSearchParams(location.search);
+const base = params.get("data") ?? "../../overload-data/";
+const get = async (path) => {
+  const res = await fetch(base + path);
+  return res.ok ? res.json() : null;
+};
+
+await clearAll();
+await kv.set("program", await get("program.json"));
+await kv.set("body", (await get("body.json")) ?? []);
+const months = [];
+for (const d = new Date(2020, 0); d <= new Date(); d.setMonth(d.getMonth() + 1)) {
+  months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+}
+const sessions = (await Promise.all(months.map((m) => get(`sessions/${m}.json`)))).filter(Boolean).flat();
+await sessionStore.putMany(sessions);
+
+await loadState();
+if (params.get("start")) {
+  await startWorkout(params.get("start"));
+  for (let i = 0; i < Number(params.get("log") ?? 0); i++) await logSet(state.active.focus.e, state.active.focus.s);
+}
+document.getElementById("out").textContent = `loaded ${sessions.length} sessions`;
+location.href = `../index.html${params.get("goto") ?? (params.get("start") ? "#workout" : "#today")}`;
+</script>

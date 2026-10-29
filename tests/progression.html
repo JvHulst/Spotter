@@ -1,0 +1,84 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Progression tests</title>
+<pre id="out">running</pre>
+<script type="module">
+import { e1rm, planExercise, nextSetWeight, warmupSets, nextTemplateId } from "../js/progression.js";
+import { bodyweightLookup, slotChoice, indexByExercise } from "../js/history.js";
+
+const results = [];
+const check = (name, actual, expected) => {
+  const ok = JSON.stringify(actual) === JSON.stringify(expected);
+  results.push(`${ok ? "PASS" : "FAIL"} ${name}${ok ? "" : `\n     expected ${JSON.stringify(expected)}\n     actual   ${JSON.stringify(actual)}`}`);
+};
+
+const today = new Date(2026, 9, 29);
+const daysAgo = (n) => new Date(today.getTime() - n * 86400000);
+const db = { load: "none", increment: 4, equipment: "dumbbell" };
+const target = { reps: [5, 8], rir: [1, 2] };
+const bw = () => 90;
+const plan = (ex, sets, gap, nSets = 3, t = target) => planExercise({
+  ex, target: t, nSets, today, bodyweightAt: bw,
+  history: sets ? [{ date: daysAgo(gap), sets: sets.map(([kg, reps, rir]) => ({ kg, reps, rir })) }] : [],
+});
+const brief = (p) => ({ mode: p.mode, kg: p.sets.map((s) => s.kg), reps: p.sets.map((s) => s.reps) });
+
+check("e1rm", Math.round(e1rm(68, 8, 1) * 10) / 10, 88.4);
+check("up: all sets at top with RIR >= 1", brief(plan(db, [[68, 8, 1], [68, 8, 1], [68, 8, 2]], 5)),
+  { mode: "up", kg: [72, 72, 72], reps: [6, 6, 6] });
+check("up: Strong sets without RIR", plan(db, [[68, 8], [68, 8], [68, 8]], 5).mode, "up");
+check("reps: one more rep per set", brief(plan(db, [[68, 7, 1], [68, 7, 1], [68, 6, 1]], 5)),
+  { mode: "reps", kg: [68, 68, 68], reps: [8, 8, 7] });
+check("reps: top reached only at RIR 0", brief(plan(db, [[68, 8, 0], [68, 8, 0], [68, 8, 0]], 5)),
+  { mode: "reps", kg: [68, 68, 68], reps: [8, 8, 8] });
+check("reps: back-off sets are ignored", brief(plan(db, [[68, 7, 1], [68, 6, 1], [56, 10, 1]], 5)),
+  { mode: "reps", kg: [68, 68, 68], reps: [8, 7, 7] });
+check("down: below the rep range", brief(plan(db, [[68, 4, 0], [68, 4, 0], [68, 3, 0]], 5)),
+  { mode: "down", kg: [64, 64, 64], reps: [5, 5, 5] });
+check("return after 4 weeks: same weight, fewer reps", brief(plan(db, [[68, 8, 1], [68, 8, 1], [68, 8, 1]], 28)),
+  { mode: "return", kg: [68, 68, 68], reps: [6, 6, 6] });
+check("return after 10 months: 18% lighter", brief(plan(db, [[68, 8, 1], [68, 8, 1], [68, 8, 1]], 300)),
+  { mode: "return", kg: [56, 56, 56], reps: [8, 8, 8] });
+check("new exercise", brief(plan(db, null, 0)), { mode: "new", kg: [null, null, null], reps: [6, 6, 6] });
+
+const assisted = { load: "subtract", increment: 5, equipment: "machine" };
+check("assisted: less assistance when progressing", plan(assisted, [[30, 10, 2], [30, 10, 2]], 3, 2, { reps: [6, 10], rir: [1, 2] }).sets[0].kg, 25);
+const weighted = { load: "add", increment: 2.5, equipment: "bodyweight" };
+check("weighted: more added weight when progressing", plan(weighted, [[10, 10, 1], [10, 10, 1]], 3, 2, { reps: [6, 10], rir: [1, 2] }).sets[0].kg, 12.5);
+const calf = { load: "none", increment: 0, equipment: "bodyweight" };
+check("increment 0: reps beyond the range", brief(plan(calf, [[0, 20], [0, 20]], 3, 2, { reps: [12, 20], rir: [1, 2] })),
+  { mode: "reps", kg: [0, 0], reps: [21, 21] });
+
+const next = (kg, reps, rir) => nextSetWeight({ ex: db, target, done: { kg, reps, rir }, nextReps: 8, bodyweight: 90 });
+check("next set: on target keeps weight", next(68, 8, 1), 68);
+check("next set: much easier adds one increment", next(68, 8, 4), 72);
+check("next set: far below target removes one increment", next(68, 6, 0), 64);
+check("next set: without RIR keeps weight", next(68, 8, null), 68);
+check("next set: without history may move several steps",
+  nextSetWeight({ ex: db, target, done: { kg: 40, reps: 12, rir: 5 }, nextReps: 8, bodyweight: 90, maxSteps: Infinity }), 48);
+
+check("warm-ups: dumbbell compound", warmupSets(68, db, "compound"), [{ kg: 32, reps: 10 }, { kg: 44, reps: 6 }, { kg: 56, reps: 3 }]);
+const bar = { load: "none", increment: 2.5, equipment: "barbell" };
+check("warm-ups: barbell starts at the empty bar", warmupSets(30, bar, "compound"), [{ kg: 20, reps: 10 }, { kg: 25, reps: 3 }]);
+check("warm-ups: isolation", warmupSets(20, db, "isolation"), [{ kg: 12, reps: 8 }]);
+check("warm-ups: none for bodyweight", warmupSets(10, weighted, "compound"), []);
+
+const program = { rotation: ["a", "b"] };
+check("rotation: starts at the first day", nextTemplateId(program, [{ template: "push" }]), "a");
+check("rotation: alternates", nextTemplateId(program, [{ template: "a" }, { template: "push" }]), "b");
+check("rotation: wraps around", nextTemplateId(program, [{ template: "b" }]), "a");
+
+const lookup = bodyweightLookup([{ date: "2025-01-01", weightKg: 85 }, { date: "2025-06-01", weightKg: 88 }]);
+check("bodyweight: before the first weigh-in", lookup(new Date(2024, 0, 1)), 85);
+check("bodyweight: most recent weigh-in", lookup(new Date(2025, 7, 1)), 88);
+
+const index = indexByExercise([
+  { id: "1", start: "2025-01-01T10:00:00", exercises: [{ ex: "x", sets: [{ kg: 10, reps: 5, warmup: true }, { kg: 20, reps: 5 }] }] },
+  { id: "2", start: "2025-02-01T10:00:00", exercises: [{ ex: "y", sets: [{ kg: 30, reps: 5 }] }] },
+]);
+check("index: warm-ups are dropped", index.get("x")[0].sets, [{ kg: 20, reps: 5 }]);
+check("slot: most recent option", slotChoice({ options: ["x", "y", "z"] }, index), "y");
+
+const failed = results.filter((r) => r.startsWith("FAIL")).length;
+document.getElementById("out").textContent = `${failed ? "FAILED" : "ALL PASSED"} ${results.length - failed}/${results.length}\n` + results.join("\n");
+</script>

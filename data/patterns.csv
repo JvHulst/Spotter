@@ -1,0 +1,26 @@
+pattern,label,kind,reps_low,reps_high,full_body
+horizontal-press,Chest press,compound,6,10,A
+incline-press,Incline press,compound,6,10,A
+chest-fly,Chest fly,isolation,10,15,
+dip,Dip,compound,6,10,A
+vertical-press,Shoulder press,compound,6,10,B
+lateral-raise,Lateral raise,isolation,10,15,
+front-raise,Front raise,isolation,10,15,
+rear-delt,Rear delt,isolation,10,15,
+shrug,Shrug,isolation,8,12,
+vertical-pull,Vertical pull,compound,6,10,B
+row,Row,compound,6,10,A
+straight-arm,Straight-arm pull,isolation,10,15,
+squat,Squat,compound,6,10,A
+leg-press,Leg press,compound,8,12,A
+lunge,Lunge,compound,8,12,A
+leg-extension,Leg extension,isolation,10,15,
+hinge,Hinge,compound,6,10,B
+hip-thrust,Hip thrust,compound,8,12,B
+leg-curl,Leg curl,isolation,10,15,
+calf-raise,Calf raise,isolation,12,20,
+curl,Biceps curl,isolation,8,12,
+triceps-extension,Triceps extension,isolation,8,12,
+core,Core,isolation,12,20,
+other,Other,isolation,8,12,
+cardio,Cardio,isolation,1,1,
