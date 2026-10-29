@@ -35,6 +35,20 @@ export function parseCsv(text) {
   return body.map((r) => Object.fromEntries(header.map((k, i) => [k.trim(), (r[i] ?? "").trim()])));
 }
 
+/** Bodyweight exercises and their weighted variants. The plain exercise progresses by reps and
+ *  the weighted one by load, so a logged exercise with added weight is the weighted variant. */
+export const WEIGHTED = { "pull-up": "weighted-pull-up", "wide-pull-up": "weighted-pull-up", "chin-up": "weighted-chin-up",
+  "dip": "weighted-dip", "chest-dip": "weighted-dip" };
+
+/** Move exercises logged with added weight to their weighted variant. Returns the changed sessions. */
+export function splitWeighted(sessions) {
+  return sessions.filter((s) => s.exercises.reduce((moved, e) => {
+    if (!WEIGHTED[e.ex] || !e.sets.some((x) => !x.warmup && x.kg > 0)) return moved;
+    e.ex = WEIGHTED[e.ex];
+    return true;
+  }, false));
+}
+
 const slug = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 function minutes(text = "") {
@@ -47,8 +61,9 @@ function minutes(text = "") {
  * Sessions from the rows of a Strong export, as {sessions, extra}. Exercise names are matched
  * to the library by name or alias, ignoring case; other names become new exercises in `extra`.
  * A set that Strong marks as a warm-up ("W") stays one, and an exercise without marked warm-ups
- * gets them by the WARMUP_FRACTION rule when its logged weight is its whole load. A set marked
- * as a failure set ("F") gets RIR 0, and a logged RPE gives RIR 10 − RPE.
+ * gets them by the WARMUP_FRACTION rule when its logged weight is its whole load. A drop set
+ * ("D") stays one, a set marked as a failure set ("F") gets RIR 0, and a logged RPE gives RIR
+ * 10 − RPE.
  */
 export function strongSessions(rows, library) {
   const lookup = new Map();
@@ -83,6 +98,7 @@ export function strongSessions(rows, library) {
     if (!e) s.exercises.push(e = { ex, sets: [] });
     const set = { kg: Math.round(Number(r[weightKey] || 0) * toKg * 100) / 100, reps: Math.round(Number(r.Reps || 0)) };
     if (order === "W") set.warmup = true;
+    if (order === "D") set.type = "drop";
     if (order === "F") set.rir = 0;
     else if (Number(r.RPE) > 0) set.rir = Math.max(0, Math.min(5, Math.round(10 - Number(r.RPE))));
     if (Number(r.Seconds) > 0) set.sec = Number(r.Seconds);
@@ -99,5 +115,6 @@ export function strongSessions(rows, library) {
       e.sets.slice(0, first).forEach((x) => { x.warmup = true; });
     }
   }
+  splitWeighted([...sessions.values()]);
   return { sessions: [...sessions.values()].sort((a, b) => a.start.localeCompare(b.start)), extra: [...extra.values()] };
 }

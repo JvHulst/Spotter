@@ -7,7 +7,7 @@ import { esc, fmtKg, since } from "../ui.js";
 
 /** Weekly working sets at which the meter is full. Growth rises with weekly sets per muscle,
  *  and 10 or more sets outperform fewer (Schoenfeld, Ogborn & Krieger 2017). */
-const WEEKLY_SETS_GUIDE = 10;
+export const WEEKLY_SETS_GUIDE = 10;
 
 export function musclesView() {
   const stats = muscleStats(state.sessions, state.library, new Date());

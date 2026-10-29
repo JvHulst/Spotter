@@ -5,6 +5,9 @@ import { e1rm, effectiveLoad, ASSUMED_RIR, RETURN_AFTER_DAYS, daysBetween } from
 
 const DAY_MS = 86400000;
 export const working = (sets) => sets.filter((s) => !s.warmup);
+/** Working sets for weekly volume: a finisher set (drop set or myo-reps mini-set) counts half,
+ *  a share chosen by hand, since it adds a few hard reps rather than a full set. */
+export const setCount = (sets) => sets.reduce((n, s) => n + (s.type ? 0.5 : 1), 0);
 export const volumeOf = (sets) => sets.reduce((v, s) => v + (s.kg ?? 0) * s.reps, 0);
 
 const ID = /^[\w.:-]{1,80}$/;
@@ -23,6 +26,7 @@ export function cleanSession(s) {
     sets: e.sets.map((x) => ({
       kg: num(x?.kg), reps: Math.round(num(x?.reps)),
       ...(x?.rir != null ? { rir: Math.round(num(x.rir)) } : {}), ...(x?.warmup ? { warmup: true } : {}),
+      ...(x?.type === "drop" || x?.type === "myo" ? { type: x.type } : {}),
       ...(num(x?.sec) ? { sec: num(x.sec) } : {}), ...(num(x?.dist) ? { dist: num(x.dist) } : {}),
     })),
   }));
@@ -150,16 +154,26 @@ export function stalled(series, n = 4) {
   return best(window.slice(n)) <= best(window.slice(0, n));
 }
 
+/** Weeks since an exercise's current run began: its sessions back to the last break longer than
+ *  RETURN_AFTER_DAYS. `entries` is the exercise's index entry. */
+export function runWeeks(entries, today) {
+  let i = entries.length - 1;
+  while (i > 0 && daysBetween(entries[i - 1].date, entries[i].date) <= RETURN_AFTER_DAYS) i--;
+  return daysBetween(entries[i].date, today) / 7;
+}
+
 /**
- * Muscles an exercise trains, as [muscle, share]: 1 for its main muscle and 0.5 for each
- * secondary muscle of its pattern. Counting indirect sets as half a set predicted growth best
- * (Pelland et al. 2026, Sports Med. 56:481).
+ * Muscles an exercise trains, as [muscle, share]: 1 for its main muscle and the pattern's share
+ * for each secondary muscle. Counting indirect sets as half a set predicted growth best (Pelland
+ * et al. 2026, Sports Med. 56:481), so that is the usual share. Squats and lunges count fully for
+ * the glutes, since squats grew the glutes as much as hip thrusts did (Plotkin et al. 2023,
+ * Front. Physiol. 14:1279170).
  */
 export function muscleShares(id, library) {
   const ex = library.exercises.get(id);
   if (!ex || ex.muscle === "other") return [];
   const secondary = library.patterns.get(ex.pattern)?.secondary ?? [];
-  return [[ex.muscle, 1], ...secondary.filter((m) => m !== ex.muscle).map((m) => [m, 0.5])];
+  return [[ex.muscle, 1], ...secondary.filter(([m]) => m !== ex.muscle)];
 }
 
 /** Per muscle: days since it was last trained, and its sets in the last 7 and 28 days. */
@@ -169,7 +183,7 @@ export function muscleStats(sessions, library, today) {
     const date = new Date(s.start);
     const age = (today - date) / DAY_MS;
     for (const e of s.exercises) {
-      const n = working(e.sets).length;
+      const n = setCount(working(e.sets));
       if (!n) continue;
       for (const [muscle, share] of muscleShares(e.ex, library)) {
         const m = stats.get(muscle) ?? { last: null, sets7: 0, sets28: 0 };
@@ -203,9 +217,9 @@ export function weeklyStats(sessions, library, today, n) {
     w.workouts += 1;
     for (const e of s.exercises) {
       const sets = working(e.sets);
-      w.sets += sets.length;
+      w.sets += setCount(sets);
       w.volume += volumeOf(sets);
-      for (const [m, share] of muscleShares(e.ex, library)) w.muscles.set(m, (w.muscles.get(m) ?? 0) + share * sets.length);
+      for (const [m, share] of muscleShares(e.ex, library)) w.muscles.set(m, (w.muscles.get(m) ?? 0) + share * setCount(sets));
     }
   }
   return weeks;

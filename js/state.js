@@ -4,6 +4,7 @@ import { kv, sessionStore } from "./db.js";
 import { loadLibrary } from "./library.js";
 import { indexByExercise, lastBySlot, usageCounts, sessionRecords } from "./history.js";
 import { builtinDays, defaultProgram, migrateProgram } from "./program.js";
+import { splitWeighted } from "./strong.js";
 
 /** Rest in seconds. Rest beyond about 90 s shows no detectable extra hypertrophy (Singer et al.
  *  2024, Front. Sports Act. Living 6:1429789); heavy compound lifts get a little more. */
@@ -52,6 +53,8 @@ export async function loadState() {
     await Promise.all([kv.delete("body"), saveSettings()]);
   }
   if (state.program !== program) await kv.set("program", state.program);
+  const moved = splitWeighted(state.sessions);
+  if (moved.length) await sessionStore.putMany(moved);
   reindex();
 }
 

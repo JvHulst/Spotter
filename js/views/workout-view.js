@@ -1,11 +1,14 @@
-// The workout screen: one card per exercise with its sets. The focused set opens an editor
-// with steppers for weight and reps and chips for RIR.
+// The workout screen: one card per exercise with its sets, its alternatives and any proposed
+// change, and below the cards an exercise for the muscle furthest behind this week. The focused
+// set opens an editor with steppers for weight and reps and chips for RIR.
 
-import { state, exercise, bodyweight, saveActive } from "../state.js";
-import { template, targetFor, alternatives } from "../program.js";
-import { exerciseSeries, stalled } from "../history.js";
+import { state, exercise, saveActive, saveProgram } from "../state.js";
+import { template, targetFor, alternatives, proposeChange, plainBodyweight, allowsFinisher, FINISHERS, FINISHER_LABEL } from "../program.js";
+import { muscleStats, muscleShares } from "../history.js";
+import { MUSCLES } from "../library.js";
+import { WEEKLY_SETS_GUIDE } from "./muscles.js";
 import { logSet, undoSet, setEdited, addSet, removeSet, removeExercise, swapExercise, addExercise, toggleSuperset,
-  saveAsTemplate, updateTemplate, finishWorkout, discardWorkout } from "../workout.js";
+  saveAsTemplate, updateTemplate, setFinisher, finishWorkout, discardWorkout } from "../workout.js";
 import { actions, ask, esc, fmtKg, ago, setsText, icon, toast, plural } from "../ui.js";
 import { openSheet, closeSheet } from "./sheet.js";
 
@@ -19,6 +22,7 @@ export function workoutView() {
   const cards = list.map((entry, e) => card(entry, e) + (e < list.length - 1 ? linkButton(e) : "")).join("");
   const body = `
     ${list.length ? cards : `<div class="empty">Add the exercises of this workout as you go.</div>`}
+    ${gapCard()}
     <button class="btn block ${list.length ? "" : "primary"}" style="margin-top:12px" data-action="add-exercise">+ Add exercise</button>
     ${!list.length ? "" : template(a.template)?.custom
       ? `<button class="btn block" style="margin-top:8px" data-action="update-template">Update template</button>`
@@ -34,17 +38,15 @@ function card(entry, e) {
   const ex = exercise(entry.ex);
   const target = targetFor(entry.ex);
   const slot = template(state.active.template)?.slots.find((s) => s.id === entry.slot);
-  const work = entry.sets.filter((s) => !s.warmup).length;
-  const history = state.index.get(entry.ex) ?? [];
-  const last = history.at(-1);
+  const work = entry.sets.filter((s) => !s.warmup && !s.type).length;
+  const last = state.index.get(entry.ex)?.at(-1);
   const started = entry.sets.some((s) => s.done && !s.warmup);
-  const stall = !started && stalled(exerciseSeries(history, ex, bodyweight()));
   let n = 0;
   const rows = entry.sets.map((set, s) => {
-    const label = set.warmup ? "W" : ++n;
+    const label = set.warmup ? "W" : set.type === "drop" ? "D" : set.type === "myo" ? "M" : ++n;
     const focused = state.active.focus?.e === e && state.active.focus?.s === s;
     return `
-      <div class="set ${set.warmup ? "warm" : ""} ${set.done ? "done" : ""}">
+      <div class="set ${set.warmup ? "warm" : ""} ${set.type ? "fin" : ""} ${set.done ? "done" : ""}">
         <button class="set-main" data-action="focus" data-e="${e}" data-s="${s}">
           <span class="idx">${label}</span>
           <span class="val num">${fmtKg(set.kg)} kg × ${set.reps}</span>
@@ -60,11 +62,12 @@ function card(entry, e) {
         <button class="name" data-action="swap" data-e="${e}">${esc(ex.name)} ${icon.swap}</button>
         <div class="last">${last ? `${ago(last.date)}: ${esc(setsText(last.sets))}` : "No history yet"}</div>
         <div class="reason mode-${entry.plan.mode}">${esc(entry.plan.reason)}</div>
-        ${started ? "" : altChips(entry, e, slot, stall)}
+        ${started ? "" : changeHint(entry, e, slot) + altChips(entry, e, slot)}
       </div>
       ${rows}
       <div class="ex-foot">
         <button class="btn small" data-action="add-set" data-e="${e}">+ Set</button>
+        ${allowsFinisher(entry.ex) ? `<button class="btn small" data-action="finisher" data-e="${e}">${FINISHER_LABEL[entry.finisher ?? ""]}</button>` : ""}
         <button class="btn small" data-action="note" data-e="${e}">${entry.note ? "Edit note" : "Note"}</button>
         <span class="grow"></span>
         <button class="btn small" data-action="remove-exercise" data-e="${e}">Remove</button>
@@ -73,16 +76,54 @@ function card(entry, e) {
     </section>`;
 }
 
-/** One-tap swaps to the slot's other exercises, shown until the first working set is logged.
- *  After four sessions without a better estimate, the row suggests a change of exercise. */
-function altChips(entry, e, slot, stall) {
-  const others = alternatives(entry.ex, slot, state.active.exercises.map((x) => x.ex));
+const inWorkout = () => state.active.exercises.map((x) => x.ex);
+const bodyweightOnly = () => state.active.exercises.length > 0 && state.active.exercises.every((x) => plainBodyweight(x.ex));
+
+/** One-tap swaps to the slot's other exercises, shown until the first working set is logged. */
+function altChips(entry, e, slot) {
+  const others = alternatives(entry.ex, slot, inWorkout());
   if (!others.length) return "";
   const chips = others.map((id) =>
     `<button class="chip" data-action="alt" data-e="${e}" data-id="${id}">${esc(exercise(id).name)}</button>`).join("");
+  return `<div class="chips alts">${chips}<button class="chip" data-action="swap" data-e="${e}">More…</button></div>`;
+}
+
+/** A proposed change of exercise (see proposeChange) with Switch and Keep. A workout of plain
+ *  bodyweight exercises counts as training at home. */
+function changeHint(entry, e, slot) {
+  const change = proposeChange(entry.ex, slot, inWorkout(), { bodyweightOnly: bodyweightOnly() });
+  if (!change) return "";
   return `
-    ${stall ? `<div class="small stall">No new best in 4 sessions: a different exercise may get you moving again.</div>` : ""}
-    <div class="chips alts">${chips}<button class="chip" data-action="swap" data-e="${e}">More…</button></div>`;
+    <div class="proposal">
+      <div class="small">${esc(change.why)}. Try <b>${esc(exercise(change.to).name)}</b>?</div>
+      <div class="row"><button class="btn small primary" data-action="alt" data-e="${e}" data-id="${change.to}">Switch</button>
+        <button class="btn small" data-action="keep" data-e="${e}">Keep</button></div>
+    </div>`;
+}
+
+/**
+ * The major muscle with the fewest sets in the last 7 days and today's plan together, when it is
+ * below half the weekly guide, with an exercise for it: the one you used most lately, and in a
+ * workout of bodyweight exercises only, a bodyweight exercise.
+ */
+function gapCard() {
+  const stats = muscleStats(state.sessions, state.library, new Date());
+  const today = new Map();
+  for (const x of state.active.exercises) {
+    for (const [m, share] of muscleShares(x.ex, state.library)) today.set(m, (today.get(m) ?? 0) + share * x.sets.filter((s) => !s.warmup).length);
+  }
+  const [muscle, sets] = MUSCLES.map((m) => [m, (stats.get(m)?.sets7 ?? 0) + (today.get(m) ?? 0)]).sort((a, b) => a[1] - b[1])[0];
+  if (sets >= WEEKLY_SETS_GUIDE / 2) return "";
+  const use = (id) => state.usage.get(id) ?? { recent: 0, total: 0 };
+  const pick = [...state.library.exercises.values()]
+    .filter((x) => x.muscle === muscle && !inWorkout().includes(x.id) && (!bodyweightOnly() || plainBodyweight(x.id)))
+    .sort((a, b) => use(b.id).recent - use(a.id).recent || use(b.id).total - use(a.id).total)[0];
+  if (!pick) return "";
+  return `
+    <section class="card proposal row">
+      <div class="grow small">Your <b>${esc(muscle)}</b> got ${fmtKg(sets)} sets in the last 7 days, counting today. Add ${esc(pick.name)}?</div>
+      <button class="btn small primary" data-action="add-gap" data-id="${pick.id}">Add</button>
+    </section>`;
 }
 
 function editor(set, e, s) {
@@ -100,7 +141,7 @@ function editor(set, e, s) {
         <div><div class="field-label">kg</div>${stepper("kg", set.kg == null ? null : fmtKg(set.kg))}</div>
         <div><div class="field-label">Reps</div>${stepper("reps", set.reps)}</div>
       </div>
-      ${set.warmup ? "" : `<div class="field-label">Reps in reserve</div><div class="rir-chips">${rir}</div>`}
+      ${set.warmup || set.type ? "" : `<div class="field-label">Reps in reserve</div><div class="rir-chips">${rir}</div>`}
       <div class="row" style="margin-top:12px">
         <button class="btn small" data-action="remove-set" data-e="${e}" data-s="${s}">Remove set</button>
         <button class="btn primary grow" data-action="log" data-e="${e}" data-s="${s}">${set.done ? "Save changes" : set.warmup ? "Done" : "Log set"}</button>
@@ -166,6 +207,16 @@ actions.note = async ({ e }) => {
   return saveActive();
 };
 actions.alt = ({ e, id }) => swapExercise(+e, id);
+actions.keep = ({ e }) => {
+  state.program.keep ??= {};
+  state.program.keep[state.active.exercises[+e].ex] = Date.now();
+  return saveProgram();
+};
+actions["add-gap"] = ({ id }) => addExercise(id);
+actions.finisher = ({ e }) => {
+  const now = state.active.exercises[+e].finisher ?? "";
+  return setFinisher(+e, FINISHERS[(FINISHERS.indexOf(now) + 1) % FINISHERS.length]);
+};
 actions.swap = ({ e }) => {
   const entry = state.active.exercises[+e];
   const slot = template(state.active.template)?.slots.find((s) => s.id === entry.slot);

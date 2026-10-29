@@ -2,11 +2,13 @@
 // session, which can also be edited.
 
 import { state, exercise, bodyweight, saveSessions, deleteSession } from "../state.js";
-import { working, volumeOf, bestSet } from "../history.js";
+import { working, volumeOf, bestSet, setCount } from "../history.js";
 import { actions, ask, esc, fmtDate, fmtKg, plural, toast, RECORD_LABEL } from "../ui.js";
 import { openSheet, closeSheet } from "./sheet.js";
 
 const PAGE = 30;
+/** "W", "D" or "M" for warm-ups, drop sets and myo-reps mini-sets; working sets are numbered. */
+const setLabel = (x) => (x.warmup ? "W" : x.type === "drop" ? "D" : x.type === "myo" ? "M" : null);
 const time = (d) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 /** A set in words: "100 kg × 5", "+10 kg × 8" for added weight, "12 reps" without weight. */
@@ -33,7 +35,8 @@ export function historyView() {
     const lines = s.exercises.map((e) => {
       const ex = exercise(e.ex);
       const work = working(e.sets);
-      return `<div class="hist-line"><span class="ellipsis">${work.length} × ${esc(ex?.name ?? e.ex)}</span>
+      const extra = work.some((x) => x.type === "drop") ? " + drop" : work.some((x) => x.type === "myo") ? " + myo" : "";
+      return `<div class="hist-line"><span class="ellipsis">${work.filter((x) => !x.type).length} × ${esc(ex?.name ?? e.ex)}${extra}</span>
         <span class="num muted">${esc(setText(ex && bestSet(work, ex, bodyweight()), ex))}</span></div>`;
     }).join("");
     parts.push(`
@@ -43,7 +46,7 @@ export function historyView() {
             <div class="small muted">${fmtDate(date)} · ${time(date)}${s.durationMin ? ` · ${s.durationMin} min` : ""}</div></div>
           ${prs ? `<span class="pr-badge">${plural(prs, "PR")}</span>` : ""}
         </div>
-        <div class="small muted hist-meta">${plural(sets.length, "working set")} · ${Math.round(volumeOf(sets)).toLocaleString()} kg</div>
+        <div class="small muted hist-meta">${plural(setCount(sets), "working set")} · ${Math.round(volumeOf(sets)).toLocaleString()} kg</div>
         ${lines}
       </a>`);
   }
@@ -69,7 +72,7 @@ export function sessionView(id) {
     <div class="eyebrow" style="margin-top:8px">${fmtDate(date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · ${time(date)}</div>
     <div class="stats">
       <div class="stat"><b class="num">${s.durationMin ?? "–"}</b><span>minutes</span></div>
-      <div class="stat"><b class="num">${work.length}</b><span>working sets</span></div>
+      <div class="stat"><b class="num">${setCount(work)}</b><span>working sets</span></div>
       <div class="stat"><b class="num">${Math.round(volumeOf(work)).toLocaleString()}</b><span>kg volume</span></div>
     </div>
     ${prs.length ? `<div class="pr-strip">${plural(prs.length, "personal record")}</div>` : ""}`;
@@ -87,8 +90,8 @@ function viewCard(e, prs) {
   let n = 0;
   const mine = prs.filter((r) => r.ex === e.ex);
   const rows = e.sets.map((x) => `
-    <div class="set ${x.warmup ? "warm" : ""}"><div class="set-main">
-      <span class="idx">${x.warmup ? "W" : ++n}</span>
+    <div class="set ${x.warmup ? "warm" : ""} ${x.type ? "fin" : ""}"><div class="set-main">
+      <span class="idx">${setLabel(x) ?? ++n}</span>
       <span class="val num">${fmtKg(x.kg)} kg × ${x.reps}</span>
       <span class="rir">${x.rir != null ? `RIR ${x.rir}` : ""}</span>
     </div></div>`).join("");
@@ -103,7 +106,7 @@ function editCard(e, i) {
   let n = 0;
   const rows = e.sets.map((x, s) => `
     <div class="edit-set">
-      <button class="idx-btn ${x.warmup ? "warm" : ""}" data-action="s-warm" data-e="${i}" data-s="${s}" aria-label="Toggle warm-up">${x.warmup ? "W" : ++n}</button>
+      <button class="idx-btn ${x.warmup ? "warm" : ""} ${x.type ? "fin" : ""}" data-action="s-type" data-e="${i}" data-s="${s}" aria-label="Change set type">${setLabel(x) ?? ++n}</button>
       ${field(s, "kg", x.kg)}<span class="muted">kg ×</span>${field(s, "reps", x.reps)}<span class="muted">RIR</span>${field(s, "rir", x.rir)}
       <button class="icon-btn" data-action="s-del-set" data-e="${i}" data-s="${s}" aria-label="Remove set">✕</button>
     </div>`).join("");
@@ -137,10 +140,14 @@ actions["s-set"] = ({ e, s: i, f }, el) => edit((s) => {
     else delete set.rir;
   } else if (Number.isFinite(v)) set[f] = f === "reps" ? Math.round(v) : v;
 });
-actions["s-warm"] = ({ e, s: i }) => edit((s) => {
+// The set number cycles through working set, warm-up, drop set and myo-reps mini-set.
+actions["s-type"] = ({ e, s: i }) => edit((s) => {
   const set = s.exercises[+e].sets[+i];
-  if (set.warmup) delete set.warmup;
-  else set.warmup = true;
+  const next = set.warmup ? "drop" : set.type === "drop" ? "myo" : set.type === "myo" ? "" : "warmup";
+  delete set.warmup;
+  delete set.type;
+  if (next === "warmup") set.warmup = true;
+  else if (next) set.type = next;
 });
 actions["s-del-set"] = ({ e, s: i }) => edit((s) => { s.exercises[+e].sets.splice(+i, 1); });
 actions["s-add-set"] = ({ e }) => edit((s) => {

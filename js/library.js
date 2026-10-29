@@ -10,7 +10,9 @@ async function readCsv(name) {
 }
 
 /** Exercises and patterns by id, and the built-in splits. Patterns in one `group` can stand in
- *  for each other in a slot; `secondary` lists the muscles a pattern trains indirectly. */
+ *  for each other in a slot. `secondary` lists the muscles a pattern trains indirectly, as
+ *  muscle:share, where the share is the fraction of a set that counts for that muscle (0.5 when
+ *  left out). */
 export async function loadLibrary() {
   const [exercises, patterns, splits] = await Promise.all([
     readCsv("exercises.csv"), readCsv("patterns.csv"), fetch(dataUrl("splits.json")).then((r) => r.json())]);
@@ -18,7 +20,7 @@ export async function loadLibrary() {
     exercises: new Map(exercises.map((e) => [e.id, { ...e, increment: Number(e.increment) }])),
     patterns: new Map(patterns.map((p) => [p.pattern, {
       ...p, reps: [Number(p.reps_low), Number(p.reps_high)], group: p.group || p.pattern,
-      secondary: p.secondary ? p.secondary.split("|") : [],
+      secondary: p.secondary ? p.secondary.split("|").map((m) => [m.split(":")[0], Number(m.split(":")[1] ?? 0.5)]) : [],
     }])),
     splits,
   };

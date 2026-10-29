@@ -2,7 +2,8 @@
 // plan of the chosen day with each exercise's planned load. Also the template editor.
 
 import { state, exercise, saveProgram } from "../state.js";
-import { template, splits, activeSplit, rotation, ownTemplate, createTemplate, addTemplateSlot, replaceTemplateSlot } from "../program.js";
+import { template, splits, activeSplit, rotation, ownTemplate, createTemplate, addTemplateSlot, replaceTemplateSlot,
+  allowsFinisher, FINISHERS, FINISHER_LABEL } from "../program.js";
 import { suggestedTemplateId, dayPlan, planFor, startWorkout } from "../workout.js";
 import { sessionsWithin } from "../history.js";
 import { actions, ask, esc, fmtKg, since, modeBadge, icon } from "../ui.js";
@@ -30,7 +31,7 @@ export function today() {
     return `
       <div class="plan-row">
         <div class="grow"><div class="eyebrow">${esc(slot.name ?? exercise(id).muscle)}</div><div class="ellipsis">${esc(exercise(id).name)}</div></div>
-        <div class="target num">${load}<div class="small muted">${slot.sets} × ${first.reps}</div></div>
+        <div class="target num">${load}<div class="small muted">${slot.sets} × ${first.reps}${slot.finisher && allowsFinisher(id) ? ` + ${slot.finisher === "drop" ? "drop" : "myo"}` : ""}</div></div>
         <div>${modeBadge(plan.mode)}</div>
       </div>`;
   }).join("");
@@ -101,6 +102,7 @@ export function templateView(id) {
         <span class="num">${slot.sets}</span>
         <button data-action="tpl-sets" data-id="${id}" data-i="${i}" data-d="1" aria-label="More sets">+</button>
       </div>
+      ${allowsFinisher(slot.ex) ? `<button class="chip small ${slot.finisher ? "on" : ""}" data-action="tpl-finisher" data-id="${id}" data-i="${i}">${slot.finisher ? FINISHER_LABEL[slot.finisher] : "Finisher"}</button>` : ""}
       <button class="icon-btn" data-action="tpl-move" data-id="${id}" data-i="${i}" aria-label="Move up" ${i ? "" : "disabled"}>↑</button>
       <button class="icon-btn" data-action="tpl-remove" data-id="${id}" data-i="${i}" aria-label="Remove">✕</button>
     </div>`).join("");
@@ -144,6 +146,11 @@ actions["tpl-name"] = (d, el) => {
 actions["tpl-sets"] = ({ id, i, d }) => {
   const slot = ownTemplate(id).slots[+i];
   slot.sets = Math.min(10, Math.max(1, slot.sets + +d));
+  return saveProgram();
+};
+actions["tpl-finisher"] = ({ id, i }) => {
+  const slot = ownTemplate(id).slots[+i];
+  slot.finisher = FINISHERS[(FINISHERS.indexOf(slot.finisher ?? "") + 1) % FINISHERS.length];
   return saveProgram();
 };
 actions["tpl-move"] = ({ id, i }) => {

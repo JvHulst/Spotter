@@ -11,9 +11,9 @@ shrug,Shrug,isolation,8,12,,
 vertical-pull,Vertical pull,compound,6,10,,biceps
 row,Row,compound,6,10,,biceps|traps
 straight-arm,Straight-arm pull,isolation,10,15,,
-squat,Squat,compound,6,10,quad-compound,glutes
+squat,Squat,compound,6,10,quad-compound,glutes:1
 leg-press,Leg press,compound,8,12,quad-compound,glutes
-lunge,Lunge,compound,8,12,quad-compound,glutes
+lunge,Lunge,compound,8,12,quad-compound,glutes:1
 leg-extension,Leg extension,isolation,10,15,,
 hinge,Hinge,compound,6,10,,glutes
 hip-thrust,Hip thrust,compound,8,12,,hamstrings

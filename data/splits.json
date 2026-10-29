@@ -10,14 +10,14 @@
         {"pattern": "horizontal-press", "name": "Bench press", "prefer": ["bench-press-barbell"], "sets": 4},
         {"pattern": "row", "sets": 4},
         {"pattern": "leg-curl", "prefer": ["seated-leg-curl-machine"], "sets": 3, "superset": true},
-        {"pattern": "lateral-raise", "sets": 3}
+        {"pattern": "lateral-raise", "finisher": "myo", "sets": 3}
       ]},
       {"id": "full-body-b", "name": "Full Body B", "slots": [
         {"pattern": "hinge", "name": "Deadlift", "prefer": ["deadlift-barbell"], "sets": 3},
         {"pattern": "incline-press", "sets": 4},
         {"pattern": "vertical-pull", "sets": 4},
         {"pattern": "triceps-extension", "prefer": ["overhead-tricep-extension-dumbbell"], "sets": 3, "superset": true},
-        {"pattern": "curl", "sets": 3}
+        {"pattern": "curl", "finisher": "drop", "sets": 3}
       ]}
     ]
   },
@@ -32,27 +32,27 @@
         {"pattern": "squat", "name": "Squat", "prefer": ["squat-barbell"], "sets": 4},
         {"pattern": "incline-press", "sets": 3},
         {"pattern": "lateral-raise", "sets": 3, "superset": true},
-        {"pattern": "triceps-extension", "prefer": ["overhead-tricep-extension-dumbbell"], "sets": 3}
+        {"pattern": "triceps-extension", "prefer": ["overhead-tricep-extension-dumbbell"], "finisher": "drop", "sets": 3}
       ]},
       {"id": "pull-a", "name": "Pull A", "slots": [
         {"pattern": "hinge", "name": "Deadlift", "prefer": ["deadlift-barbell"], "sets": 3},
         {"pattern": "vertical-pull", "sets": 4},
         {"pattern": "row", "sets": 3},
         {"pattern": "leg-curl", "prefer": ["seated-leg-curl-machine"], "sets": 3},
-        {"pattern": "curl", "sets": 3}
+        {"pattern": "curl", "finisher": "myo", "sets": 3}
       ]},
       {"id": "push-b", "name": "Push B", "slots": [
         {"pattern": "vertical-press", "sets": 4},
         {"pattern": "leg-press", "sets": 4},
         {"pattern": "horizontal-press", "prefer": ["bench-press-dumbbell"], "sets": 3},
-        {"pattern": "chest-fly", "sets": 3, "superset": true},
+        {"pattern": "chest-fly", "finisher": "myo", "sets": 3, "superset": true},
         {"pattern": "lateral-raise", "sets": 3}
       ]},
       {"id": "pull-b", "name": "Pull B", "slots": [
         {"pattern": "hinge", "prefer": ["romanian-deadlift-barbell"], "sets": 4},
         {"pattern": "row", "sets": 4},
         {"pattern": "vertical-pull", "sets": 3},
-        {"pattern": "rear-delt", "sets": 3, "superset": true},
+        {"pattern": "rear-delt", "finisher": "myo", "sets": 3, "superset": true},
         {"pattern": "curl", "sets": 3}
       ]}
     ]
@@ -68,25 +68,25 @@
         {"pattern": "row", "sets": 4},
         {"pattern": "vertical-press", "sets": 3},
         {"pattern": "vertical-pull", "sets": 3},
-        {"pattern": "triceps-extension", "prefer": ["overhead-tricep-extension-dumbbell"], "sets": 3}
+        {"pattern": "triceps-extension", "prefer": ["overhead-tricep-extension-dumbbell"], "finisher": "drop", "sets": 3}
       ]},
       {"id": "lower-a", "name": "Lower A", "slots": [
         {"pattern": "squat", "name": "Squat", "prefer": ["squat-barbell"], "sets": 4},
         {"pattern": "hinge", "prefer": ["romanian-deadlift-barbell"], "sets": 3},
-        {"pattern": "leg-extension", "sets": 3},
+        {"pattern": "leg-extension", "finisher": "myo", "sets": 3},
         {"pattern": "leg-curl", "prefer": ["seated-leg-curl-machine"], "sets": 3}
       ]},
       {"id": "upper-b", "name": "Upper B", "slots": [
         {"pattern": "incline-press", "sets": 4},
         {"pattern": "vertical-pull", "sets": 4},
         {"pattern": "row", "sets": 3},
-        {"pattern": "lateral-raise", "sets": 3, "superset": true},
+        {"pattern": "lateral-raise", "finisher": "myo", "sets": 3, "superset": true},
         {"pattern": "curl", "sets": 3}
       ]},
       {"id": "lower-b", "name": "Lower B", "slots": [
         {"pattern": "hinge", "name": "Deadlift", "prefer": ["deadlift-barbell"], "sets": 3},
         {"pattern": "leg-press", "sets": 4},
-        {"pattern": "leg-curl", "prefer": ["seated-leg-curl-machine"], "sets": 3},
+        {"pattern": "leg-curl", "prefer": ["seated-leg-curl-machine"], "finisher": "drop", "sets": 3},
         {"pattern": "leg-extension", "sets": 3}
       ]}
     ]
@@ -101,7 +101,7 @@
         {"pattern": "horizontal-press", "name": "Bench press", "prefer": ["bench-press-barbell"], "sets": 4},
         {"pattern": "incline-press", "sets": 3},
         {"pattern": "vertical-press", "sets": 3},
-        {"pattern": "lateral-raise", "sets": 3, "superset": true},
+        {"pattern": "lateral-raise", "finisher": "myo", "sets": 3, "superset": true},
         {"pattern": "triceps-extension", "prefer": ["overhead-tricep-extension-dumbbell"], "sets": 3}
       ]},
       {"id": "ppl-pull", "name": "Pull", "slots": [
@@ -109,14 +109,14 @@
         {"pattern": "vertical-pull", "sets": 4},
         {"pattern": "row", "sets": 4},
         {"pattern": "rear-delt", "sets": 3, "superset": true},
-        {"pattern": "curl", "sets": 3}
+        {"pattern": "curl", "finisher": "drop", "sets": 3}
       ]},
       {"id": "ppl-legs", "name": "Legs", "slots": [
         {"pattern": "squat", "name": "Squat", "prefer": ["squat-barbell"], "sets": 4},
         {"pattern": "hinge", "prefer": ["romanian-deadlift-barbell"], "sets": 3},
         {"pattern": "leg-press", "sets": 3},
         {"pattern": "leg-curl", "prefer": ["seated-leg-curl-machine"], "sets": 3},
-        {"pattern": "leg-extension", "sets": 3}
+        {"pattern": "leg-extension", "finisher": "myo", "sets": 3}
       ]}
     ]
   },

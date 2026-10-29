@@ -83,8 +83,8 @@ function syncCard() {
       <li>On github.com, create a new <b>private</b> repository, for example <code>spotter-data</code>.</li>
       <li>Under Settings, Developer settings, Personal access tokens, Fine-grained tokens, generate a token with access to
         only that repository and the permission Contents: Read and write.</li>
-      <li>Enter both below with a passphrase you will not forget. Use the same passphrase on every device; without it the
-        synced data cannot be read.</li>
+      <li>Enter both below with a passphrase of at least 12 characters that you will not forget, such as four random
+        words. Use the same passphrase on every device; without it the synced data cannot be read.</li>
       <li>Connect the device that holds your data first. A device that connects later takes over its program and settings.</li></ol></details>
     <input class="search" style="margin-top:8px" id="sync-repo" placeholder="owner/repository" autocapitalize="off" autocorrect="off" spellcheck="false">
     <input class="search" style="margin-top:8px" id="sync-token" placeholder="Token (github_pat_…)" autocapitalize="off" autocorrect="off" spellcheck="false">
@@ -94,8 +94,8 @@ function syncCard() {
 
 actions["sync-connect"] = async (_, button) => {
   const [repo, token, passphrase] = ["sync-repo", "sync-token", "sync-pass"].map((id) => document.getElementById(id).value);
-  if (!repo.includes("/") || !token || passphrase.length < 8) {
-    toast("Fill in owner/repository, the token, and a passphrase of at least 8 characters");
+  if (!repo.includes("/") || !token || passphrase.length < 12) {
+    toast("Fill in owner/repository, the token, and a passphrase of at least 12 characters");
     return "keep";
   }
   Object.assign(button, { disabled: true, textContent: "Connecting…" });

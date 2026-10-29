@@ -146,6 +146,7 @@ nav.tabs svg { width: 24px; height: 24px; }
 .split-row { width: 100%; text-align: left; }
 .set .idx { font-size: 13px; font-weight: 700; color: var(--muted); text-align: center; }
 .set.warm .idx { color: var(--return); }
+.set.fin .idx, .idx-btn.fin { color: var(--accent-text); }
 .set .val { font-size: 17px; font-weight: 650; }
 .set .rir { font-size: 13px; color: var(--muted); }
 .set .tick {
@@ -168,7 +169,8 @@ nav.tabs svg { width: 24px; height: 24px; }
 .rir-chips button { height: 40px; border-radius: 10px; background: var(--surface); font-weight: 700; }
 .rir-chips button.on { background: var(--text); color: var(--bg); }
 .editor .btn { margin-top: 12px; }
-.ex-foot { display: flex; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--line); }
+.ex-foot { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--line); }
+.ex-foot .btn { white-space: nowrap; padding: 0 12px; }
 .link-btn { display: flex; justify-content: center; margin: -4px 0; }
 .link-btn button { font-size: 13px; font-weight: 650; color: var(--muted); padding: 6px 12px; border-radius: 999px; background: var(--surface); }
 .link-btn button.on { color: var(--accent-ink); background: var(--accent); }
@@ -280,7 +282,10 @@ nav.tabs svg { width: 24px; height: 24px; }
 .chip-gap { flex: none; width: 1px; background: var(--line); margin: 4px 2px; }
 .chip.small { padding: 5px 10px; font-size: 12px; }
 .alts { margin-top: 10px; }
-.stall { color: var(--down); margin-top: 8px; }
+.proposal { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 10%, var(--surface-2)); }
+.proposal .row { margin-top: 8px; gap: 8px; }
+.card.proposal { margin: 12px 0; }
+.card.proposal .btn { flex: none; }
 .tpl-row { display: flex !important; gap: 8px !important; padding: 8px 8px 8px 16px !important; }
 .tpl-name { text-align: left; font-weight: 600; }
 .mini-stepper { display: flex; align-items: center; gap: 2px; background: var(--surface-2); border-radius: 10px; }

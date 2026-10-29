@@ -54,8 +54,8 @@ export function snapToGrid(fromKg, targetLoad, ex, bodyweight, { round = Math.ro
  * sets only. target: {reps: [low, high], rir: [low, high]}. bodyweight is in kg.
  * Returns {mode, sets: [{kg, reps}], rir, reason}; kg is null when there is no history.
  * Modes: "new" (no history), "return" (long gap), "up" (add load), "reps" (add reps at the
- * same load), and "down" (below the rep range last time). An exercise without a load increment,
- * and a bodyweight exercise done without added weight, progresses by reps only, beyond the range.
+ * same load), and "down" (below the rep range last time). An exercise without a load increment
+ * progresses by reps only, beyond the range.
  */
 export function planExercise({ ex, target, history, nSets, today, bodyweight: bw }) {
   const [lo, hi] = target.reps;
@@ -69,11 +69,13 @@ export function planExercise({ ex, target, history, nSets, today, bodyweight: bw
       reason: `New exercise: choose a weight for ${mid} reps with ${rirHi} in reserve` };
   }
 
-  const loads = last.sets.map((s) => effectiveLoad(s.kg, ex, bw));
+  // Finisher sets (drop sets, myo-reps) are extra work beyond the plan and do not steer it.
+  const logged = last.sets.some((s) => !s.type) ? last.sets.filter((s) => !s.type) : last.sets;
+  const loads = logged.map((s) => effectiveLoad(s.kg, ex, bw));
   const topLoad = Math.max(...loads);
-  const top = last.sets.filter((_, i) => loads[i] >= topLoad - 1e-9);
+  const top = logged.filter((_, i) => loads[i] >= topLoad - 1e-9);
   const topKg = top[0].kg;
-  const strength = Math.max(...last.sets.map((s, i) => e1rm(loads[i], s.reps, s.rir ?? ASSUMED_RIR)));
+  const strength = Math.max(...logged.map((s, i) => e1rm(loads[i], s.reps, s.rir ?? ASSUMED_RIR)));
   const gap = daysBetween(last.date, today);
 
   if (gap > RETURN_AFTER_DAYS) {
@@ -89,7 +91,7 @@ export function planExercise({ ex, target, history, nSets, today, bodyweight: bw
       reason: `${away} since last time: ${change > 0 ? `${change}% lighter` : "same weight"}, ${reps} reps at RIR ${rirHi}` };
   }
 
-  const byLoad = ex.increment > 0 && !(ex.load === "add" && topKg === 0);
+  const byLoad = ex.increment > 0;
   const qualifies = (s) => s.reps >= hi && (s.rir == null || s.rir >= rirLo);
   if (byLoad && top.every(qualifies)) {
     const kg = round2(topKg + heavier(ex) * ex.increment);
@@ -141,6 +143,20 @@ export function nextSetWeight({ ex, target, done, plannedReps, next, bodyweight,
   const ratio = actual < low ? actual / low : actual > high ? actual / high : 1;
   if (ratio === 1) return next.kg;
   return snapToGrid(next.kg, effectiveLoad(next.kg, ex, bodyweight) * ratio, ex, bodyweight, { maxSteps });
+}
+
+/**
+ * Finisher sets after an exercise's last working set, all taken to failure: a drop set ("drop")
+ * 25% lighter, rounded down to the increment, for the same reps, or myo-reps ("myo"), three
+ * mini-sets of a third of the reps at the same weight.
+ */
+export function finisherSets(kind, kg, reps, ex) {
+  if (kind === "drop") {
+    const drop = kg == null || !ex.increment ? kg : Math.max(0, round2(Math.floor((kg * 0.75) / ex.increment + 1e-9) * ex.increment));
+    return [{ type: "drop", kg: drop, reps, rir: 0 }];
+  }
+  if (kind === "myo") return Array.from({ length: 3 }, () => ({ type: "myo", kg, reps: Math.max(3, Math.round(reps / 3)), rir: 0 }));
+  return [];
 }
 
 /** Ramp-up sets before the working sets, rounded down to the exercise's load increments. */
