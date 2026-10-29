@@ -4,7 +4,7 @@
 <pre id="out">running</pre>
 <script type="module">
 import { e1rm, planExercise, nextSetWeight, warmupSets, nextTemplateId } from "../js/progression.js";
-import { bodyweightLookup, slotChoice, indexByExercise } from "../js/history.js";
+import { bodyweightLookup, slotChoice, lastBySlot, indexByExercise } from "../js/history.js";
 
 const results = [];
 const check = (name, actual, expected) => {
@@ -49,13 +49,15 @@ const calf = { load: "none", increment: 0, equipment: "bodyweight" };
 check("increment 0: reps beyond the range", brief(plan(calf, [[0, 20], [0, 20]], 3, 2, { reps: [12, 20], rir: [1, 2] })),
   { mode: "reps", kg: [0, 0], reps: [21, 21] });
 
-const next = (kg, reps, rir) => nextSetWeight({ ex: db, target, done: { kg, reps, rir }, nextReps: 8, bodyweight: 90 });
+const next = (kg, reps, rir, nextSet = { kg: 68, reps: 8 }) =>
+  nextSetWeight({ ex: db, target, done: { kg, reps, rir }, plannedReps: 8, next: nextSet, bodyweight: 90 });
 check("next set: on target keeps weight", next(68, 8, 1), 68);
+check("next set: inside the RIR range keeps weight", next(68, 8, 2), 68);
+check("next set: on target keeps a later set with fewer planned reps", next(68, 8, 1, { kg: 68, reps: 6 }), 68);
 check("next set: much easier adds one increment", next(68, 8, 4), 72);
 check("next set: far below target removes one increment", next(68, 6, 0), 64);
 check("next set: without RIR keeps weight", next(68, 8, null), 68);
-check("next set: without history may move several steps",
-  nextSetWeight({ ex: db, target, done: { kg: 40, reps: 12, rir: 5 }, nextReps: 8, bodyweight: 90, maxSteps: Infinity }), 48);
+check("next set: without history may move several steps", next(40, 12, 5, { kg: null, reps: 8 }), 48);
 
 check("warm-ups: dumbbell compound", warmupSets(68, db, "compound"), [{ kg: 32, reps: 10 }, { kg: 44, reps: 6 }, { kg: 56, reps: 3 }]);
 const bar = { load: "none", increment: 2.5, equipment: "barbell" };
@@ -63,10 +65,10 @@ check("warm-ups: barbell starts at the empty bar", warmupSets(30, bar, "compound
 check("warm-ups: isolation", warmupSets(20, db, "isolation"), [{ kg: 12, reps: 8 }]);
 check("warm-ups: none for bodyweight", warmupSets(10, weighted, "compound"), []);
 
-const program = { rotation: ["a", "b"] };
-check("rotation: starts at the first day", nextTemplateId(program, [{ template: "push" }]), "a");
-check("rotation: alternates", nextTemplateId(program, [{ template: "a" }, { template: "push" }]), "b");
-check("rotation: wraps around", nextTemplateId(program, [{ template: "b" }]), "a");
+const rotation = ["a", "b"];
+check("rotation: starts at the first day", nextTemplateId(rotation, [{ template: "push" }]), "a");
+check("rotation: alternates", nextTemplateId(rotation, [{ template: "a" }, { template: "push" }]), "b");
+check("rotation: wraps around", nextTemplateId(rotation, [{ template: "b" }]), "a");
 
 const lookup = bodyweightLookup([{ date: "2025-01-01", weightKg: 85 }, { date: "2025-06-01", weightKg: 88 }]);
 check("bodyweight: before the first weigh-in", lookup(new Date(2024, 0, 1)), 85);
@@ -77,7 +79,12 @@ const index = indexByExercise([
   { id: "2", start: "2025-02-01T10:00:00", exercises: [{ ex: "y", sets: [{ kg: 30, reps: 5 }] }] },
 ]);
 check("index: warm-ups are dropped", index.get("x")[0].sets, [{ kg: 20, reps: 5 }]);
-check("slot: most recent option", slotChoice({ options: ["x", "y", "z"] }, index), "y");
+const inSlot = lastBySlot([
+  { exercises: [{ ex: "y", slot: "s1", sets: [] }, { ex: "z", sets: [] }] },
+  { exercises: [{ ex: "x", slot: "s2", sets: [] }] },
+]);
+check("slot: the exercise last logged in the slot", slotChoice({ id: "s1", options: ["x", "y", "z"] }, inSlot), "y");
+check("slot: first option when the slot was never logged", slotChoice({ id: "s3", options: ["z", "x"] }, inSlot), "z");
 
 const failed = results.filter((r) => r.startsWith("FAIL")).length;
 document.getElementById("out").textContent = `${failed ? "FAILED" : "ALL PASSED"} ${results.length - failed}/${results.length}\n` + results.join("\n");

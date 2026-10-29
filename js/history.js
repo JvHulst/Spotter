@@ -33,16 +33,15 @@ export function bodyweightLookup(body) {
   };
 }
 
-/** The slot's exercise for today: the option performed most recently, else the first option. */
-export function slotChoice(slot, index) {
-  let best = slot.options[0];
-  let bestDate = -Infinity;
-  for (const ex of slot.options) {
-    const last = index.get(ex)?.at(-1)?.date ?? -Infinity;
-    if (last > bestDate) [best, bestDate] = [ex, last];
-  }
-  return best;
+/** Map each slot id to the exercise last logged in that slot. */
+export function lastBySlot(sessions) {
+  const last = new Map();
+  for (const s of sessions) for (const e of s.exercises) if (e.slot) last.set(e.slot, e.ex);
+  return last;
 }
+
+/** The slot's exercise for today: the one last logged in this slot, else its first option. */
+export const slotChoice = (slot, lastInSlot) => lastInSlot.get(slot.id) ?? slot.options[0];
 
 /** Best estimated one-rep max of each session with the exercise, as [{date, e1rm}]. */
 export function strengthTrend(entries, ex, bodyweightAt) {

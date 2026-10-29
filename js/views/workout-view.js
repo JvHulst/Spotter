@@ -35,12 +35,14 @@ function card(entry, e) {
     const label = set.warmup ? "W" : ++n;
     const focused = state.active.focus?.e === e && state.active.focus?.s === s;
     return `
-      <button class="set ${set.warmup ? "warm" : ""} ${set.done ? "done" : ""}" data-action="focus" data-e="${e}" data-s="${s}">
-        <span class="idx">${label}</span>
-        <span class="val num">${fmtKg(set.kg)} kg × ${set.reps}</span>
-        <span class="rir">${!set.warmup && set.rir != null ? `RIR ${set.rir}${set.rir === 4 ? "+" : ""}` : ""}</span>
-        <span class="tick">${set.done ? icon.check : ""}</span>
-      </button>${focused ? editor(entry, set, e, s) : ""}`;
+      <div class="set ${set.warmup ? "warm" : ""} ${set.done ? "done" : ""}">
+        <button class="set-main" data-action="focus" data-e="${e}" data-s="${s}">
+          <span class="idx">${label}</span>
+          <span class="val num">${fmtKg(set.kg)} kg × ${set.reps}</span>
+          <span class="rir">${!set.warmup && set.rir != null ? `RIR ${set.rir}${set.rir === 4 ? "+" : ""}` : ""}</span>
+        </button>
+        <button class="tick" data-action="tick" data-e="${e}" data-s="${s}" aria-label="${set.done ? "Edit set" : "Log set as shown"}">${set.done ? icon.check : ""}</button>
+      </div>${focused ? editor(entry, set, e, s) : ""}`;
   }).join("");
   return `
     <section class="ex-card ${entry.superset || state.active.exercises[e - 1]?.superset ? "superset" : ""}">
@@ -89,6 +91,13 @@ function linkButton(e) {
 const setAt = ({ e, s }) => state.active.exercises[+e].sets[+s];
 
 actions.focus = ({ e, s }) => { state.active.focus = { e: +e, s: +s }; return saveActive(); };
+// The tick logs a set with the values shown in one tap. A logged set, or a set still
+// without a weight, opens in the editor instead.
+actions.tick = (d) => {
+  const set = setAt(d);
+  if (set.done || set.kg == null) return actions.focus(d);
+  return logSet(+d.e, +d.s);
+};
 actions.step = (d) => {
   const set = setAt(d);
   const ex = exercise(state.active.exercises[+d.e].ex);

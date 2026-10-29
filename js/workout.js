@@ -6,9 +6,9 @@
 import { planExercise, nextSetWeight, warmupSets, nextTemplateId } from "./progression.js";
 import { slotChoice } from "./history.js";
 import { sessionStore } from "./db.js";
-import { state, exercise, pattern, template, targetFor, restFor, saveActive, saveProgram, reindex } from "./state.js";
+import { state, exercise, pattern, template, rotation, targetFor, restFor, saveActive, saveProgram, reindex } from "./state.js";
 
-export const suggestedTemplateId = () => nextTemplateId(state.program, state.sessions);
+export const suggestedTemplateId = () => nextTemplateId(rotation(), state.sessions);
 
 /** Today's plan for an exercise, with nSets working sets. */
 export function planFor(id, nSets) {
@@ -26,7 +26,7 @@ function entryFor(id, slot) {
     plan: { mode: plan.mode, reason: plan.reason },
     sets: [
       ...warmups.map((w) => ({ warmup: true, kg: w.kg, reps: w.reps, rir: null, done: false })),
-      ...plan.sets.map((s) => ({ kg: s.kg, reps: s.reps, rir: plan.rir, done: false })),
+      ...plan.sets.map((s) => ({ kg: s.kg, reps: s.reps, planReps: s.reps, rir: plan.rir, done: false })),
     ],
   };
 }
@@ -35,7 +35,7 @@ export async function startWorkout(templateId) {
   const t = template(templateId);
   state.active = {
     id: `app-${Date.now().toString(36)}`, start: localIso(new Date()), template: t.id, name: t.name,
-    exercises: t.slots.map((slot) => entryFor(slotChoice(slot, state.index), slot)),
+    exercises: t.slots.map((slot) => entryFor(slotChoice(slot, state.slotLast), slot)),
     rest: null,
   };
   state.active.focus = firstOpen();
@@ -73,11 +73,10 @@ export async function logSet(e, s) {
 
   if (!set.warmup) {
     const id = entry.ex;
-    const hasHistory = (state.index.get(id) ?? []).length > 0;
     for (const later of entry.sets.slice(s + 1)) {
       if (later.done || later.warmup || later.edited) continue;
-      later.kg = nextSetWeight({ ex: exercise(id), target: targetFor(id), done: set, nextReps: later.reps,
-        bodyweight: state.bodyweightAt(new Date()), maxSteps: hasHistory ? 1 : Infinity }) ?? later.kg;
+      later.kg = nextSetWeight({ ex: exercise(id), target: targetFor(id), done: set, plannedReps: set.planReps ?? set.reps,
+        next: later, bodyweight: state.bodyweightAt(new Date()) });
     }
   }
 

@@ -2,11 +2,11 @@
 
 import { kv, sessionStore } from "./db.js";
 import { loadLibrary } from "./library.js";
-import { indexByExercise, bodyweightLookup } from "./history.js";
+import { indexByExercise, bodyweightLookup, lastBySlot } from "./history.js";
 
 /** Rest in seconds. Rest beyond about 90 s shows no detectable extra hypertrophy (Singer et al.
  *  2024, Front. Sports Act. Living 6:1429789); heavy compound lifts get a little more. */
-export const DEFAULT_SETTINGS = { restCompound: 120, restIsolation: 90, restSuperset: 45, restWarmup: 60 };
+export const DEFAULT_SETTINGS = { restCompound: 120, restIsolation: 90, restSuperset: 45, restWarmup: 60, theme: "dark" };
 const DEFAULT_RIR = [1, 2];
 
 export const state = {
@@ -17,6 +17,7 @@ export const state = {
   settings: { ...DEFAULT_SETTINGS },
   active: null,
   index: new Map(),
+  slotLast: new Map(),
   bodyweightAt: () => 80,
   ui: {},
 };
@@ -33,6 +34,7 @@ export async function loadState() {
 /** Rebuild the lookups derived from sessions and body data. */
 export function reindex() {
   state.index = indexByExercise(state.sessions);
+  state.slotLast = lastBySlot(state.sessions);
   state.bodyweightAt = bodyweightLookup(state.body);
 }
 
@@ -48,6 +50,9 @@ export function exercise(id) {
 }
 export const pattern = (id) => state.library.patterns.get(exercise(id).pattern);
 export const template = (id) => state.program.templates.find((t) => t.id === id);
+export const activeSplit = () => state.program.splits?.find((s) => s.id === state.program.split) ?? null;
+/** The training days of the active split, in rotation order. */
+export const rotation = () => activeSplit()?.days ?? state.program.rotation ?? [];
 
 /** Rep range and target RIR of an exercise: its program entry, else its pattern's default. */
 export function targetFor(id) {

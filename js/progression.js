@@ -118,16 +118,29 @@ export function planExercise({ ex, target, history, nSets, today, bodyweightAt }
 }
 
 /**
- * Suggest the weight of the next set from a set just logged with its RIR. The logged set gives
- * today's strength estimate, and the next set's weight moves toward the load that leaves the
- * middle of the target RIR at the planned reps. Without history (maxSteps = Infinity) the weight
- * may move several increments, otherwise one at most.
+ * Weight of a remaining set after a set logged with its RIR.
+ *
+ * The logged set's estimate is compared with the range that its plan expected: the estimate
+ * at the logged weight for the planned reps with the target RIR range left. Inside that range
+ * the remaining set keeps its weight. Outside it, the remaining set's weight scales by the
+ * ratio to the nearer end of the range, so its own planned reps (often fewer in later sets)
+ * still apply, and moves by at most maxSteps increments. A remaining set without a weight,
+ * as for an exercise without history, gets the weight at which the estimate leaves the middle
+ * of the target RIR at its planned reps.
  */
-export function nextSetWeight({ ex, target, done, nextReps, bodyweight, maxSteps = 1 }) {
-  if (done.rir == null || done.kg == null || !ex.increment) return done.kg;
-  const strength = e1rm(effectiveLoad(done.kg, ex, bodyweight), done.reps, done.rir);
-  const rirMid = (target.rir[0] + target.rir[1]) / 2;
-  return snapToGrid(done.kg, loadFor(strength, nextReps, rirMid), ex, bodyweight, { maxSteps });
+export function nextSetWeight({ ex, target, done, plannedReps, next, bodyweight, maxSteps = 1 }) {
+  if (done.rir == null || done.kg == null || !ex.increment) return next.kg;
+  const [rirLo, rirHi] = target.rir;
+  const load = effectiveLoad(done.kg, ex, bodyweight);
+  const actual = e1rm(load, done.reps, done.rir);
+  if (next.kg == null) {
+    return snapToGrid(done.kg, loadFor(actual, next.reps, (rirLo + rirHi) / 2), ex, bodyweight, { maxSteps: Infinity });
+  }
+  const low = e1rm(load, plannedReps, rirLo);
+  const high = e1rm(load, plannedReps, rirHi);
+  const ratio = actual < low ? actual / low : actual > high ? actual / high : 1;
+  if (ratio === 1) return next.kg;
+  return snapToGrid(next.kg, effectiveLoad(next.kg, ex, bodyweight) * ratio, ex, bodyweight, { maxSteps });
 }
 
 /** Ramp-up sets before the working sets, rounded down to the exercise's load increments. */
@@ -144,8 +157,7 @@ export function warmupSets(workKg, ex, kind) {
 }
 
 /** The training day after the most recent session from the rotation, or the first one. */
-export function nextTemplateId(program, sessions) {
-  const rotation = program.rotation;
+export function nextTemplateId(rotation, sessions) {
   const last = sessions.findLast((s) => rotation.includes(s.template));
   return last ? rotation[(rotation.indexOf(last.template) + 1) % rotation.length] : rotation[0];
 }

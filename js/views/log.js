@@ -43,11 +43,11 @@ export function sessionView(id) {
   const cards = s.exercises.map((e) => {
     let n = 0;
     const rows = e.sets.map((x) => `
-      <div class="set ${x.warmup ? "warm" : ""}" style="grid-template-columns:28px 1fr auto">
+      <div class="set ${x.warmup ? "warm" : ""}"><div class="set-main">
         <span class="idx">${x.warmup ? "W" : ++n}</span>
         <span class="val num">${fmtKg(x.kg)} kg × ${x.reps}</span>
         <span class="rir">${x.rir != null ? `RIR ${x.rir}` : ""}</span>
-      </div>`).join("");
+      </div></div>`).join("");
     return `<section class="ex-card"><div class="ex-head"><a class="name" style="color:inherit;text-decoration:none" href="#exercise-${e.ex}">${esc(exercise(e.ex)?.name ?? e.ex)}</a>
       ${e.note ? `<div class="small muted">${esc(e.note)}</div>` : ""}</div>${rows}</section>`;
   }).join("");

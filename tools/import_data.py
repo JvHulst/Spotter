@@ -2,7 +2,7 @@
 
 The data repository is the private store that the app syncs with:
 
-    program.json           training days (templates), their rotation, per-exercise targets
+    program.json           splits, their training days (templates), per-exercise targets
     sessions/YYYY-MM.json  logged workouts, one file per month, one session per line
     body.json              daily bodyweight, sleep, HRV and resting heart rate
 
@@ -38,9 +38,14 @@ SLOT_MIN_SHARE = 0.25
 REP_SEED_SESSIONS = 8
 # Candidate rep ranges for double progression, lowest first.
 REP_RANGES = [(5, 8), (6, 10), (8, 12), (10, 15), (12, 20), (15, 25)]
-DEFAULT_RIR = [1, 2]
-# Sets per slot on the full-body days, by pattern kind.
-FULL_BODY_SETS = {"compound": 3, "isolation": 2}
+# Squat, bench press and deadlift are trained for strength as well as size. Heavy loads build
+# more one-rep-max strength than light ones, while growth is similar across loads when sets
+# end near failure (Schoenfeld et al. 2017, J. Strength Cond. Res. 31:3508).
+STRENGTH_LIFTS = {"squat-barbell", "bench-press-barbell", "deadlift-barbell"}
+STRENGTH_REPS = [4, 6]
+# Target RIR by pattern kind. Sets closer to failure add growth but not strength (Robinson et al.
+# 2024, Sports Med. 54:2209), and isolation sets can end closer to failure at little cost.
+RIR_BY_KIND = {"compound": [1, 2], "isolation": [0, 1]}
 # The Fitbit export stores bodyweight in pounds.
 LBS_TO_KG = 0.45359237
 
@@ -160,14 +165,68 @@ def write_sessions(sessions, out):
 # --- Program --------------------------------------------------------------------------
 
 def build_program(df, exercises, patterns):
-    """Derive the program: slot templates from recent Strong routines, two full-body days built
-    from those slots (the rotation), and rep and RIR targets per exercise.
-
-    Each frequent movement pattern in a routine becomes a slot. Its options are the exercises
-    used for that pattern in the routine (most frequent first), its set count is the median
-    number of working sets, and slots are ordered by where the pattern usually falls in a session.
-    """
+    """Build the program: the splits of data/splits.json filled with exercises from the log,
+    the recent Strong routines as one more split, and rep and RIR targets per exercise."""
     recent = df[df["start"] > df["start"].max() - pd.Timedelta(weeks=TEMPLATE_WINDOW_WEEKS)]
+    splits, templates = blueprint_splits(df, recent, exercises, patterns)
+    routines = routine_templates(recent, exercises, patterns)
+    if routines:
+        splits.append({"id": "strong", "name": "Strong routines", "perWeek": "",
+                       "about": "The routines logged most in Strong over the last six months.",
+                       "days": [t["id"] for t in routines]})
+        templates += routines
+    used = sorted({ex for t in templates for s in t["slots"] for ex in s["options"]})
+    targets = {ex: target_for(df, ex, exercises, patterns) for ex in used}
+    return {"split": splits[0]["id"], "splits": splits, "templates": templates, "exercises": targets}
+
+
+def blueprint_splits(df, recent, exercises, patterns):
+    """Fill the splits of data/splits.json with exercises.
+
+    A slot that names an exercise always uses it. A slot that names a pattern offers its
+    preferred exercises first, then the logged exercises of that pattern, ranked by sessions in
+    the recent window and then in the whole log. Exercises that the split already uses in its
+    named slots are left out. A pattern that was never logged offers all library exercises of
+    that pattern.
+    """
+    recent_count = recent.drop_duplicates(["start", "ex"])["ex"].value_counts()
+    total_count = df.drop_duplicates(["start", "ex"])["ex"].value_counts()
+
+    def ranked(pattern, exclude, prefer):
+        pool = [e for e in exercises.index[exercises["pattern"] == pattern] if e not in exclude]
+        logged = sorted((e for e in pool if e in total_count and e not in prefer),
+                        key=lambda e: (-recent_count.get(e, 0), -total_count.get(e, 0)))
+        return [e for e in prefer if e in pool] + logged or pool
+
+    splits, templates = [], {}
+    for blueprint in json.loads((LIBRARY_DIR / "splits.json").read_text(encoding="utf-8")):
+        days = [d for d in blueprint["days"] if "ref" not in d]
+        named = {s["exercise"] for d in days for s in d["slots"] if "exercise" in s}
+        for day in days:
+            slots = []
+            for s in day["slots"]:
+                if "exercise" in s:
+                    ex = s["exercise"]
+                    slots.append({"id": f"{day['id']}-{ex}", "name": re.sub(r" \(.*\)$", "", exercises.loc[ex, "name"]),
+                                  "pattern": exercises.loc[ex, "pattern"], "options": [ex], "sets": s["sets"]})
+                else:
+                    slots.append({"id": f"{day['id']}-{s['pattern']}", "name": patterns.loc[s["pattern"], "label"],
+                                  "pattern": s["pattern"], "sets": s["sets"],
+                                  "options": ranked(s["pattern"], named, s.get("prefer", []))})
+            templates[day["id"]] = {"id": day["id"], "name": day["name"], "slots": slots}
+        splits.append({**{k: blueprint[k] for k in ("id", "name", "perWeek", "about")},
+                       "days": [d.get("ref", d.get("id")) for d in blueprint["days"]]})
+    return splits, list(templates.values())
+
+
+def routine_templates(recent, exercises, patterns):
+    """Turn each frequent recent Strong routine into a training day.
+
+    Each frequent movement pattern in a routine becomes a slot, or several slots when sessions
+    usually include several exercises of that pattern. A slot offers the exercises logged in its
+    position (most frequent first), its set count is the median number of working sets, and the
+    slots are ordered by where they usually fall in a session.
+    """
     working = recent[~recent["warmup"]]
     templates = []
     for name, routine in recent.groupby("workout"):
@@ -177,64 +236,34 @@ def build_program(df, exercises, patterns):
         order = routine.drop_duplicates(["start", "ex"]).copy()
         order["position"] = order.groupby("start").cumcount()
         order["pattern"] = order["ex"].map(exercises["pattern"])
+        order["rank"] = order.groupby(["start", "pattern"]).cumcount()
         slots = []
         for pattern, p in order.groupby("pattern"):
             if p["start"].nunique() < SLOT_MIN_SHARE * n_sessions:
                 continue
-            sets = working[working["start"].isin(p["start"]) & working["ex"].isin(p["ex"])]
-            n_sets = sets.groupby(["start", "ex"]).size().median()
-            slots.append((p["position"].median(), {
-                "id": f"{slug(name)}-{pattern}",
-                "name": patterns.loc[pattern, "label"],
-                "pattern": pattern,
-                "options": p["ex"].value_counts().index.tolist(),
-                "sets": int(np.clip(round(n_sets), 2, 5)),
-            }))
+            n_slots = int(round(p.groupby("start").size().median()))
+            for k in range(n_slots):
+                q = p[p["rank"] == k]
+                n_sets = working.merge(q[["start", "ex"]]).groupby(["start", "ex"]).size().median()
+                number = f" {k + 1}" if n_slots > 1 else ""
+                slots.append((q["position"].median(), {
+                    "id": f"{slug(name)}-{pattern}{number.replace(' ', '-')}",
+                    "name": patterns.loc[pattern, "label"] + number,
+                    "pattern": pattern,
+                    "options": q["ex"].value_counts().index.tolist(),
+                    "sets": int(np.clip(round(n_sets), 2, 5)),
+                }))
         slots = [slot for _, slot in sorted(slots, key=lambda s: s[0])]
         templates.append((n_sessions, {"id": slug(name), "name": name, "slots": slots}))
-
-    templates = [t for _, t in sorted(templates, key=lambda t: -t[0])]
-    full_body = full_body_days(templates, exercises, patterns)
-    used = sorted({ex for t in templates for s in t["slots"] for ex in s["options"]})
-    targets = {ex: {"reps": seed_rep_range(df, ex, exercises, patterns), "rir": DEFAULT_RIR} for ex in used}
-    return {"rotation": [t["id"] for t in full_body], "templates": full_body + templates, "exercises": targets}
+    return [t for _, t in sorted(templates, key=lambda t: -t[0])]
 
 
-def full_body_days(templates, exercises, patterns):
-    """Redistribute the slots of the routine templates over two full-body days, A and B.
-
-    Every session then trains every major muscle, which keeps weekly sets per muscle even
-    when only one or two sessions fit in a week. A compound slot goes to the day that
-    patterns.csv assigns to its pattern. An isolation slot goes to the day without a compound
-    slot for the same muscle, or else to the day with fewer sets. Within a day, compound slots
-    come first, in the order of patterns.csv.
-    """
-    merged = {}
-    for t in templates:
-        for slot in t["slots"]:
-            options = merged.setdefault(slot["pattern"], [])
-            options += [ex for ex in slot["options"] if ex not in options]
-
-    order = {p: i for i, p in enumerate(patterns.index)}
-    days = {"A": [], "B": []}
-    compound_days = {}
-    for pattern in sorted(merged, key=lambda p: (patterns.loc[p, "kind"] != "compound", order[p])):
-        muscle = exercises.loc[merged[pattern][0], "muscle"]
-        if patterns.loc[pattern, "kind"] == "compound":
-            day = patterns.loc[pattern, "full_body"]
-            compound_days.setdefault(muscle, set()).add(day)
-        else:
-            free = {"A", "B"} - compound_days.get(muscle, set())
-            sets = {d: sum(s["sets"] for s in days[d]) for d in sorted(free or days)}
-            day = min(sets, key=sets.get)
-        days[day].append({
-            "id": f"full-body-{day.lower()}-{pattern}",
-            "name": patterns.loc[pattern, "label"],
-            "pattern": pattern,
-            "options": merged[pattern],
-            "sets": FULL_BODY_SETS[patterns.loc[pattern, "kind"]],
-        })
-    return [{"id": f"full-body-{d.lower()}", "name": f"Full Body {d}", "slots": days[d]} for d in "AB"]
+def target_for(df, ex, exercises, patterns):
+    """Rep range and target RIR of an exercise. The main lifts get the strength range, other
+    exercises a range seeded from the log, and the target RIR follows the pattern's kind."""
+    kind = patterns.loc[exercises.loc[ex, "pattern"], "kind"]
+    reps = STRENGTH_REPS if ex in STRENGTH_LIFTS else seed_rep_range(df, ex, exercises, patterns)
+    return {"reps": reps, "rir": RIR_BY_KIND[kind]}
 
 
 def seed_rep_range(df, ex, exercises, patterns):
@@ -299,6 +328,7 @@ def main():
     parser.add_argument("--fitbit", type=Path, help="Fitbit folder from a Google Takeout export")
     parser.add_argument("--out", type=Path, required=True, help="data repository folder")
     parser.add_argument("--rebuild-program", action="store_true", help="overwrite program.json")
+    parser.add_argument("--bundle", type=Path, help="also write the data repository as one file for Import files")
     args = parser.parse_args()
 
     exercises, patterns, lookup = load_library()
@@ -316,6 +346,20 @@ def main():
         days = read_fitbit(args.fitbit)
         write_rows(args.out / "body.json", days)
         print(f"Body: {len(days)} days, {days[0]['date']} to {days[-1]['date']}")
+    if args.bundle:
+        write_bundle(args.out, args.bundle)
+        print(f"Bundle: {args.bundle}")
+
+
+def write_bundle(out, path):
+    """Write the whole data repository as one file in the app's backup format, so that a
+    single file selected in Import files loads the program, body data and all sessions."""
+    def read(name):
+        return json.loads((out / name).read_text(encoding="utf-8")) if (out / name).exists() else None
+    sessions = [s for f in sorted((out / "sessions").glob("*.json")) for s in json.loads(f.read_text(encoding="utf-8"))]
+    bundle = {"format": "overload-backup", "version": 1, "program": read("program.json"),
+              "body": read("body.json") or [], "sessions": sessions}
+    path.write_text(json.dumps(bundle, separators=(",", ":")), encoding="utf-8")
 
 
 if __name__ == "__main__":

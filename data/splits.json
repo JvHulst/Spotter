@@ -1,0 +1,146 @@
+[
+  {
+    "id": "full-body",
+    "name": "Full Body",
+    "perWeek": "1–3 days",
+    "about": "Every session trains every major muscle, so a short week still covers everything.",
+    "days": [
+      {"id": "full-body-a", "name": "Full Body A", "slots": [
+        {"exercise": "squat-barbell", "sets": 3},
+        {"exercise": "bench-press-barbell", "sets": 3},
+        {"pattern": "row", "sets": 3},
+        {"pattern": "leg-curl", "sets": 2, "prefer": ["seated-leg-curl-machine"]},
+        {"pattern": "lateral-raise", "sets": 2},
+        {"pattern": "triceps-extension", "sets": 2, "prefer": ["overhead-tricep-extension-dumbbell"]}
+      ]},
+      {"id": "full-body-b", "name": "Full Body B", "slots": [
+        {"exercise": "deadlift-barbell", "sets": 2},
+        {"pattern": "incline-press", "sets": 3},
+        {"pattern": "vertical-pull", "sets": 3},
+        {"pattern": "leg-extension", "sets": 2},
+        {"pattern": "rear-delt", "sets": 2},
+        {"pattern": "curl", "sets": 2}
+      ]}
+    ]
+  },
+  {
+    "id": "push-pull",
+    "name": "Push / Pull",
+    "perWeek": "2–4 days",
+    "about": "Pushing muscles with quads, pulling muscles with hamstrings. Legs are spread over both days and each muscle gets two sessions in four days.",
+    "days": [
+      {"id": "push-a", "name": "Push A", "slots": [
+        {"exercise": "bench-press-barbell", "sets": 3},
+        {"exercise": "squat-barbell", "sets": 3},
+        {"pattern": "incline-press", "sets": 3},
+        {"pattern": "leg-extension", "sets": 2},
+        {"pattern": "lateral-raise", "sets": 3},
+        {"pattern": "triceps-extension", "sets": 2, "prefer": ["overhead-tricep-extension-dumbbell"]}
+      ]},
+      {"id": "pull-a", "name": "Pull A", "slots": [
+        {"exercise": "deadlift-barbell", "sets": 2},
+        {"pattern": "vertical-pull", "sets": 3},
+        {"pattern": "row", "sets": 3},
+        {"pattern": "leg-curl", "sets": 3, "prefer": ["seated-leg-curl-machine"]},
+        {"pattern": "curl", "sets": 3},
+        {"pattern": "rear-delt", "sets": 2}
+      ]},
+      {"id": "push-b", "name": "Push B", "slots": [
+        {"pattern": "vertical-press", "sets": 3},
+        {"pattern": "horizontal-press", "sets": 3},
+        {"pattern": "leg-press", "sets": 3},
+        {"pattern": "chest-fly", "sets": 2},
+        {"pattern": "lateral-raise", "sets": 3},
+        {"pattern": "triceps-extension", "sets": 2, "prefer": ["overhead-tricep-extension-dumbbell"]}
+      ]},
+      {"id": "pull-b", "name": "Pull B", "slots": [
+        {"pattern": "hinge", "sets": 3},
+        {"pattern": "vertical-pull", "sets": 3},
+        {"pattern": "row", "sets": 3},
+        {"pattern": "leg-curl", "sets": 2, "prefer": ["seated-leg-curl-machine"]},
+        {"pattern": "curl", "sets": 3},
+        {"pattern": "calf-raise", "sets": 2}
+      ]}
+    ]
+  },
+  {
+    "id": "upper-lower",
+    "name": "Upper / Lower",
+    "perWeek": "4 days",
+    "about": "The most common four-day split: each muscle twice a week, with one heavy and one lighter day per half.",
+    "days": [
+      {"id": "upper-a", "name": "Upper A", "slots": [
+        {"exercise": "bench-press-barbell", "sets": 3},
+        {"pattern": "row", "sets": 3},
+        {"pattern": "vertical-press", "sets": 3},
+        {"pattern": "vertical-pull", "sets": 3},
+        {"pattern": "lateral-raise", "sets": 2},
+        {"pattern": "triceps-extension", "sets": 2, "prefer": ["overhead-tricep-extension-dumbbell"]}
+      ]},
+      {"id": "lower-a", "name": "Lower A", "slots": [
+        {"exercise": "squat-barbell", "sets": 3},
+        {"pattern": "hinge", "sets": 3},
+        {"pattern": "leg-extension", "sets": 3},
+        {"pattern": "leg-curl", "sets": 3, "prefer": ["seated-leg-curl-machine"]},
+        {"pattern": "calf-raise", "sets": 3}
+      ]},
+      {"id": "upper-b", "name": "Upper B", "slots": [
+        {"pattern": "incline-press", "sets": 3},
+        {"pattern": "vertical-pull", "sets": 3},
+        {"pattern": "row", "sets": 3},
+        {"pattern": "chest-fly", "sets": 2},
+        {"pattern": "lateral-raise", "sets": 3},
+        {"pattern": "curl", "sets": 3}
+      ]},
+      {"id": "lower-b", "name": "Lower B", "slots": [
+        {"exercise": "deadlift-barbell", "sets": 2},
+        {"pattern": "leg-press", "sets": 3},
+        {"pattern": "leg-curl", "sets": 3, "prefer": ["seated-leg-curl-machine"]},
+        {"pattern": "leg-extension", "sets": 2},
+        {"pattern": "calf-raise", "sets": 3},
+        {"pattern": "core", "sets": 2}
+      ]}
+    ]
+  },
+  {
+    "id": "ppl",
+    "name": "Push / Pull / Legs",
+    "perWeek": "3 or 6 days",
+    "about": "Three focused days. At three days a week each muscle gets one session, at six days two.",
+    "days": [
+      {"id": "ppl-push", "name": "Push", "slots": [
+        {"exercise": "bench-press-barbell", "sets": 3},
+        {"pattern": "incline-press", "sets": 3},
+        {"pattern": "vertical-press", "sets": 3},
+        {"pattern": "chest-fly", "sets": 2},
+        {"pattern": "lateral-raise", "sets": 3},
+        {"pattern": "triceps-extension", "sets": 3, "prefer": ["overhead-tricep-extension-dumbbell"]}
+      ]},
+      {"id": "ppl-pull", "name": "Pull", "slots": [
+        {"exercise": "deadlift-barbell", "sets": 2},
+        {"pattern": "vertical-pull", "sets": 3},
+        {"pattern": "row", "sets": 3},
+        {"pattern": "straight-arm", "sets": 2},
+        {"pattern": "rear-delt", "sets": 3},
+        {"pattern": "curl", "sets": 3}
+      ]},
+      {"id": "ppl-legs", "name": "Legs", "slots": [
+        {"exercise": "squat-barbell", "sets": 3},
+        {"pattern": "hinge", "sets": 3},
+        {"pattern": "leg-press", "sets": 3},
+        {"pattern": "leg-curl", "sets": 3, "prefer": ["seated-leg-curl-machine"]},
+        {"pattern": "leg-extension", "sets": 2},
+        {"pattern": "calf-raise", "sets": 3}
+      ]}
+    ]
+  },
+  {
+    "id": "ulppl",
+    "name": "Upper / Lower + PPL",
+    "perWeek": "5 days",
+    "about": "Upper and lower days followed by push, pull and legs, so most muscles get two sessions in five days.",
+    "days": [
+      {"ref": "upper-a"}, {"ref": "lower-a"}, {"ref": "ppl-push"}, {"ref": "ppl-pull"}, {"ref": "ppl-legs"}
+    ]
+  }
+]
