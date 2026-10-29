@@ -37,8 +37,8 @@
       {"id": "pull-a", "name": "Pull A", "slots": [
         {"pattern": "hinge", "name": "Deadlift", "prefer": ["deadlift-barbell"], "sets": 3},
         {"pattern": "vertical-pull", "sets": 4},
-        {"pattern": "row", "sets": 3},
         {"pattern": "leg-curl", "prefer": ["seated-leg-curl-machine"], "sets": 3},
+        {"pattern": "row", "sets": 3},
         {"pattern": "curl", "finisher": "myo", "sets": 3}
       ]},
       {"id": "push-b", "name": "Push B", "slots": [
@@ -77,8 +77,8 @@
         {"pattern": "leg-curl", "prefer": ["seated-leg-curl-machine"], "sets": 3}
       ]},
       {"id": "upper-b", "name": "Upper B", "slots": [
-        {"pattern": "incline-press", "sets": 4},
         {"pattern": "vertical-pull", "sets": 4},
+        {"pattern": "incline-press", "sets": 4},
         {"pattern": "row", "sets": 3},
         {"pattern": "lateral-raise", "finisher": "myo", "sets": 3, "superset": true},
         {"pattern": "curl", "sets": 3}
@@ -99,8 +99,8 @@
     "days": [
       {"id": "ppl-push", "name": "Push", "slots": [
         {"pattern": "horizontal-press", "name": "Bench press", "prefer": ["bench-press-barbell"], "sets": 4},
-        {"pattern": "incline-press", "sets": 3},
         {"pattern": "vertical-press", "sets": 3},
+        {"pattern": "incline-press", "sets": 3},
         {"pattern": "lateral-raise", "finisher": "myo", "sets": 3, "superset": true},
         {"pattern": "triceps-extension", "prefer": ["overhead-tricep-extension-dumbbell"], "sets": 3}
       ]},
@@ -126,7 +126,11 @@
     "perWeek": "5 days",
     "about": "Upper and lower days followed by push, pull and legs, so most muscles get two sessions in five days.",
     "days": [
-      {"ref": "upper-a"}, {"ref": "lower-a"}, {"ref": "ppl-push"}, {"ref": "ppl-pull"}, {"ref": "ppl-legs"}
+      {"ref": "upper-a"},
+      {"ref": "lower-a"},
+      {"ref": "ppl-push"},
+      {"ref": "ppl-pull"},
+      {"ref": "ppl-legs"}
     ]
   }
 ]

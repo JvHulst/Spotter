@@ -1,6 +1,6 @@
 // Local storage in IndexedDB. The "sessions" store holds one record per session; the "kv"
 // store holds single documents: the program, settings, the active workout, deleted session
-// ids, and the sync configuration.
+// ids, weigh-ins, and the sync configuration.
 
 const DB_NAME = "spotter";
 let opened;
@@ -49,6 +49,6 @@ export async function clearAll() {
 export const persist = () => navigator.storage?.persist?.().catch(() => false);
 
 /** All app data as one document, the format of Export backup. */
-export function backup({ program, settings, sessions, deleted }) {
-  return { format: "spotter-backup", version: 2, exported: new Date().toISOString(), program, settings, sessions, deleted };
+export function backup({ program, settings, sessions, deleted, weights }) {
+  return { format: "spotter-backup", version: 2, exported: new Date().toISOString(), program, settings, sessions, deleted, weights };
 }

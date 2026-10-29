@@ -57,7 +57,7 @@ export function today() {
     <button class="card row split-row" data-action="toggle-splits">
       <div class="grow"><div class="eyebrow">Split</div><b>${esc(split.name)}</b>
         <span class="small muted"> · ${esc(split.perWeek)} a week</span></div>
-      <span class="small muted">${state.ui.showSplits ? "Close" : "Change"}</span>
+      <span class="small link-text">${state.ui.showSplits ? "Close" : "Change"}</span>
     </button>
     ${state.ui.showSplits ? splitList() : ""}
     <div class="chips">${days}<span class="chip-gap"></span>${mine}<button class="chip" data-action="new-template">+ Template</button></div>
@@ -96,15 +96,20 @@ export function templateView(id) {
   if (!t) return { title: "Template", back: "#today", body: `<div class="empty">Template not found</div>` };
   const rows = t.slots.map((slot, i) => `
     <div class="tpl-row">
-      <button class="grow ellipsis tpl-name" data-action="tpl-swap" data-id="${id}" data-i="${i}">${esc(exercise(slot.ex)?.name ?? slot.ex)}</button>
-      <div class="mini-stepper">
-        <button data-action="tpl-sets" data-id="${id}" data-i="${i}" data-d="-1" aria-label="Fewer sets">−</button>
-        <span class="num">${slot.sets}</span>
-        <button data-action="tpl-sets" data-id="${id}" data-i="${i}" data-d="1" aria-label="More sets">+</button>
+      <div class="row">
+        <button class="grow ellipsis tpl-name" data-action="tpl-swap" data-id="${id}" data-i="${i}">${esc(exercise(slot.ex)?.name ?? slot.ex)}</button>
+        <button class="icon-btn" data-action="tpl-move" data-id="${id}" data-i="${i}" aria-label="Move up" ${i ? "" : "disabled"}>↑</button>
+        <button class="icon-btn" data-action="tpl-remove" data-id="${id}" data-i="${i}" aria-label="Remove">✕</button>
       </div>
-      ${allowsFinisher(slot.ex) ? `<button class="chip small ${slot.finisher ? "on" : ""}" data-action="tpl-finisher" data-id="${id}" data-i="${i}">${slot.finisher ? FINISHER_LABEL[slot.finisher] : "Finisher"}</button>` : ""}
-      <button class="icon-btn" data-action="tpl-move" data-id="${id}" data-i="${i}" aria-label="Move up" ${i ? "" : "disabled"}>↑</button>
-      <button class="icon-btn" data-action="tpl-remove" data-id="${id}" data-i="${i}" aria-label="Remove">✕</button>
+      <div class="row tpl-opts">
+        <div class="mini-stepper">
+          <button data-action="tpl-sets" data-id="${id}" data-i="${i}" data-d="-1" aria-label="Fewer sets">−</button>
+          <span class="num">${slot.sets} sets</span>
+          <button data-action="tpl-sets" data-id="${id}" data-i="${i}" data-d="1" aria-label="More sets">+</button>
+        </div>
+        <button class="chip small ${slot.warmup === false ? "" : "on"}" data-action="tpl-warmup" data-id="${id}" data-i="${i}">Warm-up</button>
+        ${allowsFinisher(slot.ex) ? `<button class="chip small ${slot.finisher ? "on" : ""}" data-action="tpl-finisher" data-id="${id}" data-i="${i}">${slot.finisher ? FINISHER_LABEL[slot.finisher] : "No finisher"}</button>` : ""}
+      </div>
     </div>`).join("");
   const body = `
     <div class="field-label">Name</div>
@@ -146,6 +151,12 @@ actions["tpl-name"] = (d, el) => {
 actions["tpl-sets"] = ({ id, i, d }) => {
   const slot = ownTemplate(id).slots[+i];
   slot.sets = Math.min(10, Math.max(1, slot.sets + +d));
+  return saveProgram();
+};
+actions["tpl-warmup"] = ({ id, i }) => {
+  const slot = ownTemplate(id).slots[+i];
+  if (slot.warmup === false) delete slot.warmup;
+  else slot.warmup = false;
   return saveProgram();
 };
 actions["tpl-finisher"] = ({ id, i }) => {

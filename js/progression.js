@@ -159,17 +159,59 @@ export function finisherSets(kind, kg, reps, ex) {
   return [];
 }
 
-/** Ramp-up sets before the working sets, rounded down to the exercise's load increments. */
+/** Fractions of the working weight that warm-up sets aim for. */
+const WARMUP_STEPS = { compound: [0.5, 0.7, 0.85], isolation: [0.6] };
+/** Reps of a warm-up set by its fraction of the working weight: more reps when lighter. */
+const warmupReps = (fraction) => (fraction < 0.6 ? 8 : fraction < 0.8 ? 5 : 3);
+const BAR = 20;
+const PLATES = [20, 10, 5, 2.5, 1.25];
+
+/**
+ * Ways to load a barbell to `kg`, as the plates on one side, largest first: the fewest plates,
+ * and the same with pairs of 10 kg plates in place of some 20 kg plates.
+ */
+function plateLoadings(kg) {
+  let side = (kg - BAR) / 2;
+  const fewest = [];
+  for (const p of PLATES) {
+    while (side >= p - 1e-9) {
+      fewest.push(p);
+      side -= p;
+    }
+  }
+  if (side > 1e-6) return [];
+  const twenties = fewest.filter((p) => p === 20).length;
+  const rest = fewest.filter((p) => p !== 20);
+  return Array.from({ length: twenties + 1 }, (_, k) => [...Array(twenties - k).fill(20), ...Array(2 * k).fill(10), ...rest]);
+}
+
+/**
+ * Ramp-up sets before the working sets.
+ *
+ * A barbell exercise starts with the empty bar. The next warm-ups are the loads on the way to
+ * the working weight when its plates go on largest first, so each warm-up only adds plates. Of
+ * the ways to load the working weight (see plateLoadings), the one whose intermediate loads lie
+ * closest to WARMUP_STEPS is used. Other exercises get the WARMUP_STEPS loads rounded down to
+ * their increment.
+ */
 export function warmupSets(workKg, ex, kind) {
   if (!workKg || ex.load !== "none" || !ex.increment) return [];
-  const scheme = kind === "compound" ? [[0.5, 10], [0.7, 6], [0.85, 3]] : [[0.6, 8]];
-  const floor = ex.equipment === "barbell" ? 20 : ex.increment;
-  const sets = [];
-  for (const [pct, reps] of scheme) {
-    const kg = Math.max(floor, round2(Math.floor((workKg * pct) / ex.increment) * ex.increment));
-    if (kg < workKg && !(sets.length && kg <= sets.at(-1).kg)) sets.push({ kg, reps });
+  const targets = WARMUP_STEPS[kind].map((f) => f * workKg);
+  let loads;
+  if (ex.equipment === "barbell") {
+    if (workKg <= BAR) return [];
+    const options = plateLoadings(workKg).map((plates) => {
+      const steps = plates.slice(0, -1).map((_, i) => BAR + 2 * plates.slice(0, i + 1).reduce((a, b) => a + b, 0)).filter((kg) => kg < workKg);
+      const nearest = (t) => steps.reduce((best, kg) => (best == null || Math.abs(kg - t) < Math.abs(best - t) ? kg : best), null);
+      const chosen = kind === "compound" ? targets.map(nearest).filter((kg) => kg != null) : [];
+      const miss = targets.reduce((sum, t) => sum + Math.min(Math.abs((nearest(t) ?? BAR) - t), Math.abs(BAR - t)), 0);
+      return { loads: [BAR, ...new Set(chosen)].sort((a, b) => a - b), miss };
+    });
+    loads = options.reduce((best, o) => (!best || o.miss < best.miss - 1e-9 ? o : best), null)?.loads ?? [BAR];
+  } else {
+    loads = [...new Set(targets.map((t) => round2(Math.floor(t / ex.increment) * ex.increment)))].filter((kg) => kg >= ex.increment && kg < workKg);
   }
-  return sets;
+  return loads.map((kg, i) => ({ kg, reps: ex.equipment === "barbell" && i === 0 ? 10 : warmupReps(kg / workKg) }));
 }
 
 /** The training day after the most recent session from the rotation, or the first one. */

@@ -29,7 +29,7 @@ const HOME = { id: "home", name: "Home", slots: [
   ["pull-up", 4], ["push-up", 4], ["dip", 3], ["inverted-row-bodyweight", 3], ["bulgarian-split-squat-bodyweight", 3],
 ].map(([ex, sets]) => ({ id: `home-${ex}`, ex, sets })) };
 
-export const defaultProgram = () => ({ version: 2, split: "full-body", custom: [structuredClone(HOME)], slots: {}, exercises: {}, extra: [], keep: {} });
+export const defaultProgram = () => ({ version: 3, split: "full-body", custom: [structuredClone(HOME)], slots: {}, exercises: {}, extra: [], keep: {} });
 
 /** Built-in training days by id, with slot ids made of the day id and the slot's pattern. */
 export function builtinDays(library) {
@@ -49,17 +49,18 @@ export function builtinDays(library) {
   return days;
 }
 
-/** A program to the current form (version 2). A program without a version holds the built-in
- *  days itself, and its split "strong" lists routines derived from Strong, which become the
- *  user's own templates. */
+/**
+ * A program in the current form (version 3). A program without a version holds the built-in
+ * days itself, and of it only the active split and the exercise targets carry over. Version 2
+ * also held routines derived from Strong among the user's templates, which version 3 leaves out:
+ * the templates made in the app have ids starting with "t-".
+ */
 export function migrateProgram(p) {
-  if (p.version === 2) return p;
+  if (p.version === 3) return p;
+  if (p.version === 2) return { ...p, version: 3, custom: p.custom.filter((t) => t.id === "home" || t.id.startsWith("t-")) };
   if (!p.templates) return defaultProgram();
-  const strong = p.splits?.find((s) => s.id === "strong")?.days ?? [];
-  const custom = strong.map((id) => p.templates.find((t) => t.id === id)).filter(Boolean)
-    .map((t) => ({ id: t.id, name: t.name, slots: t.slots.map((s) => ({ id: s.id, ex: s.options[0], sets: s.sets })) }));
   const split = p.splits?.some((s) => s.id === p.split && s.id !== "strong") ? p.split : "full-body";
-  return { version: 2, split, custom: [structuredClone(HOME), ...custom], slots: {}, exercises: p.exercises ?? {}, extra: [], keep: {} };
+  return { ...defaultProgram(), split, exercises: p.exercises ?? {} };
 }
 
 const ID = /^[\w.:-]{1,80}$/;
@@ -79,14 +80,15 @@ export function cleanProgram(raw) {
       .filter(([, v]) => v !== undefined));
   }
   return {
-    version: 2, split: typeof p.split === "string" ? p.split : "full-body",
+    version: 3, split: typeof p.split === "string" ? p.split : "full-body",
     custom: (p.custom ?? []).filter((t) => ID.test(t?.id) && Array.isArray(t.slots)).map((t) => ({
       id: t.id, name: name(t.name),
       slots: t.slots.filter((s) => ID.test(s?.id) && ID.test(s.ex)).map((s) => ({ id: s.id, ex: s.ex, sets: Math.min(10, Math.max(1, Math.round(Number(s.sets)) || 3)),
-        superset: Boolean(s.superset), finisher: finisher(s.finisher) })),
+        superset: Boolean(s.superset), finisher: finisher(s.finisher), ...(s.warmup === false ? { warmup: false } : {}) })),
     })),
     slots: Object.fromEntries(Object.entries(p.slots ?? {}).filter(([id]) => ID.test(id)).map(([id, v]) => [id, {
-      ...(v?.superset != null ? { superset: Boolean(v.superset) } : {}), ...(v?.finisher != null ? { finisher: finisher(v.finisher) } : {}) }])),
+      ...(v?.superset != null ? { superset: Boolean(v.superset) } : {}), ...(v?.finisher != null ? { finisher: finisher(v.finisher) } : {}),
+      ...(v?.warmup != null ? { warmup: Boolean(v.warmup) } : {}) }])),
     exercises,
     extra: (p.extra ?? []).filter((e) => ID.test(e?.id)).map((e) => ({ id: e.id, name: name(e.name), muscle: "other", pattern: "other",
       equipment: "other", load: "none", increment: Number.isFinite(e.increment) ? e.increment : 2.5, aliases: "" })),
@@ -105,13 +107,14 @@ export function template(id) {
   const own = state.program.custom.find((t) => t.id === id);
   if (own) {
     return { id, name: own.name, custom: true, slots: own.slots.filter((s) => exercise(s.ex)).map((s) => ({
-      id: s.id, name: null, pattern: exercise(s.ex).pattern, prefer: [s.ex], sets: s.sets, superset: Boolean(s.superset), finisher: s.finisher ?? "" })) };
+      id: s.id, name: null, pattern: exercise(s.ex).pattern, prefer: [s.ex], sets: s.sets, superset: Boolean(s.superset),
+      finisher: s.finisher ?? "", warmup: s.warmup !== false })) };
   }
   const day = state.days.get(id);
   if (!day) return null;
   return { ...day, custom: false, slots: day.slots.map((s) => {
     const own = state.program.slots[s.id] ?? {};
-    return { ...s, superset: own.superset ?? Boolean(s.superset), finisher: own.finisher ?? s.finisher ?? "" };
+    return { ...s, superset: own.superset ?? Boolean(s.superset), finisher: own.finisher ?? s.finisher ?? "", warmup: own.warmup ?? true };
   }) };
 }
 
@@ -178,6 +181,22 @@ export function proposeChange(id, slot, exclude, { bodyweightOnly = false } = {}
 /** Finishers only go on isolation exercises, where a set to failure costs little recovery. */
 export const allowsFinisher = (id) => pattern(id).kind === "isolation";
 export const FINISHERS = ["", "drop", "myo"];
+
+/** The set types that can follow each other when a set's label is tapped: working set, warm-up,
+ *  drop set, and for isolation exercises a myo-reps mini-set. */
+export const setTypes = (id) => ["", "warmup", "drop", ...(allowsFinisher(id) ? ["myo"] : [])];
+
+/** Store a choice for a slot of a workout: in the user's template, or as an override of a
+ *  built-in slot. */
+export function setSlotOption(templateId, slotId, key, value) {
+  const own = ownTemplate(templateId);
+  if (own) {
+    const slot = own.slots.find((x) => x.id === slotId);
+    if (slot) slot[key] = value;
+  } else if (slotId) {
+    state.program.slots[slotId] = { ...state.program.slots[slotId], [key]: value };
+  }
+}
 export const FINISHER_LABEL = { "": "No finisher", drop: "Drop set", myo: "Myo-reps" };
 
 /** Rep range and target RIR of an exercise: its program entry, else the defaults above. */
@@ -197,7 +216,7 @@ export function restFor(id) {
 
 const newId = (prefix) => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
-/** A new template from a list of {ex, sets, superset, finisher}. Returns its id. */
+/** A new template from a list of {ex, sets, superset, finisher, warmup}. Returns its id. */
 export function createTemplate(name, items = []) {
   const id = newId("t");
   state.program.custom.push({ id, name, slots: [] });
@@ -211,12 +230,13 @@ export const ownTemplate = (id) => state.program.custom.find((t) => t.id === id)
 export function addTemplateSlot(t, ex, sets = 3) {
   t.slots.push({ id: newId(t.id), ex, sets });
 }
-/** Replace a template's exercises by [{ex, sets, superset, finisher, slot}]. An exercise that stays in its
+/** Replace a template's exercises by [{ex, sets, superset, finisher, warmup, slot}]. An exercise that stays in its
  *  slot keeps the slot's id, and with it the slot's history. */
 export function setTemplateSlots(t, items) {
   t.slots = items.map((x) => {
     const same = t.slots.find((s) => s.id === x.slot && s.ex === x.ex);
-    return { id: same?.id ?? newId(t.id), ex: x.ex, sets: x.sets, superset: Boolean(x.superset), finisher: x.finisher ?? "" };
+    return { id: same?.id ?? newId(t.id), ex: x.ex, sets: x.sets, superset: Boolean(x.superset), finisher: x.finisher ?? "",
+      ...(x.warmup === false ? { warmup: false } : {}) };
   });
 }
 export function replaceTemplateSlot(t, i, ex) {

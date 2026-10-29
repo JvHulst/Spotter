@@ -51,6 +51,7 @@ export const icon = {
   settings: svg("M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"),
   check: svg("M20 6 9 17l-5-5"),
   swap: svg("m16 3 4 4-4 4M20 7H4M8 21l-4-4 4-4M4 17h16"),
+  more: svg("M5 12h.01M12 12h.01M19 12h.01").replace('stroke-width="2"', 'stroke-width="3"'),
   link: svg("M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"),
 };
 
@@ -91,6 +92,34 @@ export function showTip(el) {
   document.body.append(tip);
   tip.style.left = `${Math.min(innerWidth - tip.offsetWidth - 8, Math.max(8, r.left + r.width / 2 - tip.offsetWidth / 2))}px`;
   tip.style.top = `${r.top + scrollY - tip.offsetHeight - 6}px`;
+}
+
+/**
+ * A menu of options in a bottom sheet. options: [{key, label, on, danger}], where `on` marks the
+ * current choice. Resolves to the chosen key, or null when the sheet is closed.
+ */
+export function choose(title, options) {
+  return new Promise((resolve) => {
+    const bg = document.createElement("div");
+    bg.className = "sheet-bg";
+    bg.innerHTML = `
+      <div class="sheet menu" role="dialog" aria-modal="true">
+        <div class="grabber"></div>
+        <div class="eyebrow" style="margin:0 4px 8px">${esc(title)}</div>
+        <div class="list">${options.map((o) => `
+          <button data-key="${esc(o.key)}" class="${o.danger ? "danger" : ""}">
+            <span class="grow">${esc(o.label)}</span>${o.on ? icon.check : ""}</button>`).join("")}</div>
+        <button class="btn block" data-key="">Cancel</button>
+      </div>`;
+    bg.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-key]");
+      if (!button && event.target !== bg) return;
+      event.stopPropagation();
+      bg.remove();
+      resolve(button?.dataset.key || null);
+    });
+    document.body.append(bg);
+  });
 }
 
 export function toast(message) {

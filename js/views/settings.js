@@ -1,6 +1,7 @@
 // Settings: sync, import and backup, bodyweight, rest timer defaults and theme.
 
-import { state, saveSettings, saveProgram, saveSessions, addCustomExercises, reindex, cleanSettings, cleanDeleted, DEFAULT_SETTINGS } from "../state.js";
+import { state, saveSettings, saveProgram, saveSessions, addCustomExercises, reindex, cleanSettings, cleanDeleted, cleanWeights,
+  storeWeights, bodyweight, DEFAULT_SETTINGS } from "../state.js";
 import { kv, backup, clearAll } from "../db.js";
 import { defaultProgram, cleanProgram } from "../program.js";
 import { cleanSession } from "../history.js";
@@ -41,15 +42,11 @@ export function settingsView() {
         updates them. A Spotter backup restores everything it holds.</p>
       <button class="btn block" data-action="export">Export backup</button>
     </section>
-    <section class="card">
-      <div class="eyebrow">Bodyweight</div>
-      <div class="row" style="padding:6px 0">
-        <div class="grow small muted">For pull-ups, dips and other bodyweight exercises</div>
-        <button class="btn small" data-action="bw-step" data-d="-1">−</button>
-        <b class="num" style="min-width:64px;text-align:center">${fmtKg(s.bodyweight)} kg</b>
-        <button class="btn small" data-action="bw-step" data-d="1">+</button>
-      </div>
-    </section>
+    <a class="card row" href="#body" style="text-decoration:none;color:inherit">
+      <div class="grow"><div class="eyebrow">Bodyweight</div>
+        <div class="small muted">${state.latestWeight ? `${fmtKg(bodyweight())} kg, weighed ${state.latestWeight.date}` : "No weigh-ins yet"}</div></div>
+      <span class="small link-text">Weigh-ins ›</span>
+    </a>
     <section class="card">
       <div class="eyebrow">Rest timer</div>
       ${rest("restCompound", "Compound")}${rest("restIsolation", "Isolation")}
@@ -163,10 +160,17 @@ async function restore(doc) {
     await saveProgram();
     parts.push("program");
   }
-  const weight = doc.body?.findLast?.((d) => d.weightKg)?.weightKg;
-  if (doc.settings || Number.isFinite(weight)) {
-    state.settings = { ...cleanSettings({ ...state.settings, ...doc.settings }), ...(Number.isFinite(weight) ? { bodyweight: weight } : {}) };
+  if (doc.settings) {
+    state.settings = cleanSettings({ ...state.settings, ...doc.settings });
     await saveSettings();
+  }
+  const weights = { ...cleanWeights(doc.weights) };
+  for (const d of Array.isArray(doc.body) ? doc.body : []) {
+    if (/^\d{4}-\d\d-\d\d$/.test(d?.date) && Number.isFinite(d.weightKg)) weights[d.date] ??= { kg: d.weightKg, at: 0 };
+  }
+  if (Object.keys(weights).length) {
+    await storeWeights({ ...weights, ...state.weights });
+    parts.push(plural(Object.keys(weights).length, "weigh-in"));
   }
   if (doc.deleted) {
     Object.assign(state.deleted, cleanDeleted(doc.deleted));
@@ -190,12 +194,6 @@ actions.export = async () => {
   }
 };
 
-actions["bw-step"] = ({ d }) => {
-  state.settings.bodyweight = Math.max(30, Math.round((state.settings.bodyweight + 0.5 * +d) * 10) / 10);
-  reindex();
-  return saveSettings();
-};
-
 actions["rest-step"] = ({ key, d }) => {
   state.settings[key] = Math.min(600, Math.max(15, state.settings[key] + 15 * +d));
   return saveSettings();
@@ -216,7 +214,7 @@ export function applyTheme() {
 actions.wipe = async () => {
   if (!(await ask("Delete all workouts, the program and the settings from this device? Data synced to GitHub stays there.", { ok: "Delete", danger: true }))) return;
   await clearAll();
-  Object.assign(state, { program: defaultProgram(), sessions: [], deleted: {}, active: null, settings: { ...DEFAULT_SETTINGS } });
+  Object.assign(state, { program: defaultProgram(), sessions: [], deleted: {}, weights: {}, latestWeight: null, active: null, settings: { ...DEFAULT_SETTINGS } });
   reindex();
   applyTheme();
   status = null;

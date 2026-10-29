@@ -90,7 +90,7 @@ function viewCard(e, prs) {
   let n = 0;
   const mine = prs.filter((r) => r.ex === e.ex);
   const rows = e.sets.map((x) => `
-    <div class="set ${x.warmup ? "warm" : ""} ${x.type ? "fin" : ""}"><div class="set-main">
+    <div class="set static ${x.warmup ? "warm" : ""} ${x.type ? "fin" : ""}"><div class="set-main">
       <span class="idx">${setLabel(x) ?? ++n}</span>
       <span class="val num">${fmtKg(x.kg)} kg × ${x.reps}</span>
       <span class="rir">${x.rir != null ? `RIR ${x.rir}` : ""}</span>

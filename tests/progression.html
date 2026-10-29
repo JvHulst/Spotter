@@ -67,10 +67,15 @@ check("finisher sets do not steer the plan", brief(planExercise({ ex: db, target
   history: [{ date: daysAgo(5), sets: [{ kg: 68, reps: 8, rir: 1 }, { kg: 68, reps: 8, rir: 1 }, { kg: 68, reps: 3, rir: 0, type: "myo" }] }] })),
   { mode: "up", kg: [72, 72], reps: [5, 5] });
 check("finisher sets count half for volume", setCount([{ kg: 1, reps: 1 }, { kg: 1, reps: 1, type: "drop" }, { kg: 1, reps: 1, type: "myo" }]), 2);
-check("warm-ups: dumbbell compound", warmupSets(68, db, "compound"), [{ kg: 32, reps: 10 }, { kg: 44, reps: 6 }, { kg: 56, reps: 3 }]);
+check("warm-ups: dumbbell compound", warmupSets(68, db, "compound"), [{ kg: 32, reps: 8 }, { kg: 44, reps: 5 }, { kg: 56, reps: 3 }]);
 const bar = { load: "none", increment: 2.5, equipment: "barbell" };
-check("warm-ups: barbell starts at the empty bar", warmupSets(30, bar, "compound"), [{ kg: 20, reps: 10 }, { kg: 25, reps: 3 }]);
-check("warm-ups: isolation", warmupSets(20, db, "isolation"), [{ kg: 12, reps: 8 }]);
+const kgs = (sets) => sets.map((s) => `${s.kg}x${s.reps}`).join(" ");
+check("warm-ups: light barbell, only the empty bar", kgs(warmupSets(30, bar, "compound")), "20x10");
+check("warm-ups: 75 kg adds plates only (10s, 10s, then 5 and 2.5)", kgs(warmupSets(75, bar, "compound")), "20x10 40x8 60x3");
+check("warm-ups: 100 kg", kgs(warmupSets(100, bar, "compound")), "20x10 60x5 80x3");
+check("warm-ups: 140 kg", kgs(warmupSets(140, bar, "compound")), "20x10 60x8 100x5 120x3");
+check("warm-ups: barbell isolation, the bar only", kgs(warmupSets(40, bar, "isolation")), "20x10");
+check("warm-ups: isolation", warmupSets(20, db, "isolation"), [{ kg: 12, reps: 5 }]);
 check("warm-ups: none for bodyweight", warmupSets(10, weighted, "compound"), []);
 
 const rotation = ["a", "b"];
@@ -131,9 +136,9 @@ const hostile = cleanSession({ id: "a", start: "2026-01-01T10:00:00", name: 7, d
   { ex: 'x"><svg onload=alert(1)>', sets: [] }, { ex: "squat-barbell", sets: [{ kg: "<img>", reps: "8<script>", rir: "1" }] }] });
 check("clean: bad exercise ids are dropped and numbers converted", hostile.exercises, [{ ex: "squat-barbell", sets: [{ kg: 0, reps: 0, rir: 1 }] }]);
 check("clean: text fields get defaults", [hostile.name, hostile.durationMin], ["Workout", null]);
-const prog = cleanProgram({ version: 2, split: "ppl", custom: [{ id: "t1", name: "<b>", slots: [{ id: "s1", ex: "dip", sets: 99 }, { id: "s2", ex: "<x>" }] }, { id: "<x>", slots: [] }],
+const prog = cleanProgram({ version: 2, split: "ppl", custom: [{ id: "t-1", name: "<b>", slots: [{ id: "s1", ex: "dip", sets: 99 }, { id: "s2", ex: "<x>" }] }, { id: "<x>", slots: [] }],
   extra: [{ id: "custom-a", name: "A", muscle: "<script>", load: "add" }], exercises: { "bench-press-barbell": { reps: [4, 6], rir: "x" } } });
-check("clean: program templates keep only valid ids", prog.custom, [{ id: "t1", name: "<b>", slots: [{ id: "s1", ex: "dip", sets: 10, superset: false, finisher: "" }] }]);
+check("clean: program templates keep only valid ids", prog.custom, [{ id: "t-1", name: "<b>", slots: [{ id: "s1", ex: "dip", sets: 10, superset: false, finisher: "" }] }]);
 check("clean: extra exercises get fixed fields", prog.extra[0].muscle + prog.extra[0].load, "othernone");
 check("clean: targets keep only valid values", prog.exercises, { "bench-press-barbell": { reps: [4, 6] } });
 

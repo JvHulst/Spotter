@@ -8,7 +8,7 @@ import { workoutView } from "./views/workout-view.js";
 import { historyView, sessionView } from "./views/log.js";
 import { libraryView, exerciseView } from "./views/library-view.js";
 import { musclesView } from "./views/muscles.js";
-import { progressView } from "./views/progress.js";
+import { progressView, bodyView } from "./views/progress.js";
 import { settingsView, applyTheme } from "./views/settings.js";
 import { startSync } from "./sync.js";
 import { sheetHtml } from "./views/sheet.js";
@@ -28,6 +28,7 @@ function route() {
     case "exercise": return exerciseView(id);
     case "muscles": return musclesView();
     case "progress": return progressView();
+    case "body": return bodyView();
     case "template": return templateView(id);
     case "setup": return settingsView();
     default: return today();
@@ -63,6 +64,16 @@ async function dispatch(name, el, event) {
 document.addEventListener("click", (event) => {
   unlockAudio();
   document.querySelector(".tip")?.remove();
+  // A click that ends a swipe does nothing, and a tap on a swiped row closes it, except on its
+  // delete button.
+  const row = event.target.closest("[data-swipe]");
+  const onDelete = event.target.closest(".swipe-del");
+  if (row && !onDelete && Date.now() - Number(row.dataset.swiped ?? 0) < 400) return event.preventDefault();
+  if (row?.classList.contains("swiped") && !onDelete) {
+    row.classList.remove("swiped");
+    return event.preventDefault();
+  }
+  closeSwipes();
   const tip = event.target.closest("[data-tip]");
   if (tip) return showTip(tip);
   const el = event.target.closest("[data-action]");
@@ -86,6 +97,26 @@ window.addEventListener("hashchange", () => {
   window.scrollTo(0, 0);
   render();
 });
+
+// --- Swipe to delete: a row with data-swipe slides left to reveal its delete button ----------
+
+let swipe = null;
+const closeSwipes = (except) => document.querySelectorAll(".swiped").forEach((row) => row !== except && row.classList.remove("swiped"));
+document.addEventListener("touchstart", (event) => {
+  const row = event.target.closest("[data-swipe]");
+  closeSwipes(row);
+  swipe = row ? { row, x: event.touches[0].clientX, y: event.touches[0].clientY } : null;
+}, { passive: true });
+document.addEventListener("touchmove", (event) => {
+  if (!swipe) return;
+  const dx = event.touches[0].clientX - swipe.x, dy = event.touches[0].clientY - swipe.y;
+  if (Math.abs(dy) > Math.abs(dx)) swipe = null;
+  else if (Math.abs(dx) > 30) {
+    swipe.row.classList.toggle("swiped", dx < 0);
+    swipe.row.dataset.swiped = String(Date.now());
+    swipe = null;
+  }
+}, { passive: true });
 
 // --- Rest timer ---------------------------------------------------------------------------
 

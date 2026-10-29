@@ -6,7 +6,8 @@
 import { planExercise, nextSetWeight, warmupSets, finisherSets, nextTemplateId } from "./progression.js";
 import { state, exercise, pattern, bodyweight, saveActive, saveProgram, saveSessions } from "./state.js";
 import { splitWeighted } from "./strong.js";
-import { template, rotation, slotChoice, slotOptions, targetFor, restFor, ownTemplate, createTemplate, setTemplateSlots, allowsFinisher } from "./program.js";
+import { template, rotation, slotChoice, slotOptions, targetFor, restFor, ownTemplate, createTemplate, setTemplateSlots, allowsFinisher,
+  setSlotOption } from "./program.js";
 
 /** Rest before a finisher set, in seconds: a drop set follows once the weight is changed, and a
  *  myo-reps mini-set after about five deep breaths. */
@@ -35,11 +36,12 @@ export function dayPlan(t) {
 
 function entryFor(id, slot, nSets = slot?.sets ?? 3) {
   const plan = planFor(id, nSets);
-  const warmups = warmupSets(plan.sets[0].kg, exercise(id), pattern(id).kind);
+  const warmup = slot?.warmup !== false;
+  const warmups = warmup ? warmupSets(plan.sets[0].kg, exercise(id), pattern(id).kind) : [];
   const last = plan.sets.at(-1);
   const finisher = allowsFinisher(id) ? slot?.finisher ?? "" : "";
   return {
-    ex: id, slot: slot?.id ?? null, superset: Boolean(slot?.superset), finisher, note: "",
+    ex: id, slot: slot?.id ?? null, superset: Boolean(slot?.superset), finisher, warmup, note: "",
     plan: { mode: plan.mode, reason: plan.reason },
     sets: [
       ...warmups.map((w) => ({ warmup: true, kg: w.kg, reps: w.reps, rir: null, done: false })),
@@ -113,16 +115,39 @@ export async function setFinisher(e, kind) {
   entry.finisher = kind;
   entry.sets = [...entry.sets.filter((x) => !x.type || x.done),
     ...(base ? finisherSets(kind, base.kg, base.planReps ?? base.reps, exercise(entry.ex)).map((s) => ({ ...s, done: false })) : [])];
-  const own = ownTemplate(state.active.template);
-  if (own) {
-    const slot = own.slots.find((x) => x.id === entry.slot);
-    if (slot) slot.finisher = kind;
-  } else if (entry.slot) {
-    state.program.slots[entry.slot] = { ...state.program.slots[entry.slot], finisher: kind };
-  }
+  setSlotOption(state.active.template, entry.slot, "finisher", kind);
   state.active.focus = firstOpen(e);
   await saveProgram();
   await saveActive();
+}
+
+/** Turn the warm-up sets of entry e on or off, and store the choice in the slot. */
+export async function setWarmups(e, on) {
+  const entry = state.active.exercises[e];
+  const first = entry.sets.find((x) => !x.warmup && !x.type);
+  entry.warmup = on;
+  entry.sets = entry.sets.filter((x) => !x.warmup || x.done);
+  if (on && !entry.sets.some((x) => x.warmup)) {
+    const warmups = warmupSets(first?.kg, exercise(entry.ex), pattern(entry.ex).kind);
+    entry.sets.unshift(...warmups.map((w) => ({ warmup: true, kg: w.kg, reps: w.reps, rir: null, done: false })));
+  }
+  setSlotOption(state.active.template, entry.slot, "warmup", on);
+  state.active.focus = firstOpen(e);
+  await saveProgram();
+  await saveActive();
+}
+
+/** Make set s of entry e a working set (""), a warm-up, a drop set or a myo-reps mini-set. */
+export function setType(e, s, type) {
+  const entry = state.active.exercises[e];
+  const set = entry.sets[s];
+  delete set.warmup;
+  delete set.type;
+  if (type === "warmup") Object.assign(set, { warmup: true, rir: null });
+  else if (type) Object.assign(set, { type, rir: 0 });
+  else set.rir ??= targetFor(entry.ex).rir[0];
+  replan(entry);
+  return saveActive();
 }
 
 /**
@@ -240,7 +265,8 @@ export async function toggleSuperset(e) {
 }
 
 const templateItems = () => state.active.exercises.map((x) => ({
-  ex: x.ex, sets: x.sets.filter((s) => !s.warmup && !s.type).length, superset: x.superset, finisher: x.finisher ?? "", slot: x.slot }));
+  ex: x.ex, sets: x.sets.filter((s) => !s.warmup && !s.type).length, superset: x.superset, finisher: x.finisher ?? "",
+  warmup: x.warmup !== false, slot: x.slot }));
 
 /** Save the current exercises as a new template and continue the workout as that template. */
 export async function saveAsTemplate(name) {

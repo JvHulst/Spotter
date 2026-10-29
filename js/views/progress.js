@@ -1,12 +1,13 @@
 // Progress: workouts per week, estimated one-rep max per exercise, weekly sets per muscle,
 // weekly volume and recent records.
 
-import { state, exercise, bodyweight } from "../state.js";
+import { state, exercise, bodyweight, weighIns, setWeight } from "../state.js";
 import { STRENGTH_LIFTS } from "../program.js";
 import { weeklyStats, exerciseSeries } from "../history.js";
 import { MUSCLES, MINOR_MUSCLES } from "../library.js";
 import { lineChart, barChart, sparkline, heatmap, compact, rangeStart, rangeChips } from "../charts.js";
-import { actions, esc, fmtDate, fmtKg, plural, RECORD_LABEL } from "../ui.js";
+import { actions, esc, fmtDate, fmtKg, plural, toast, RECORD_LABEL } from "../ui.js";
+import { localIso } from "../workout.js";
 
 const DAY_MS = 86400000;
 
@@ -35,6 +36,8 @@ export function progressView() {
     </section>
 
     ${strengthSection(now)}
+
+    ${bodyweightCard(now)}
 
     <section class="card">
       <div class="eyebrow">Weekly sets per muscle</div>
@@ -108,6 +111,63 @@ function strengthSection(now) {
       <a class="small" href="#exercise-${pick}" style="color:var(--accent-text)">Records and history ›</a>
     </section>`;
 }
+
+/** Bodyweight over time from the weigh-ins, with the latest one and its change over 4 weeks. */
+function bodyweightCard(now) {
+  const all = weighIns().map((w) => ({ date: new Date(`${w.date}T12:00:00`), value: w.kg }));
+  const range = state.ui.bwRange ?? "3M";
+  const from = rangeStart(range, now);
+  const points = all.filter((p) => !from || p.date >= from).map((p) => ({ ...p, tip: `${fmtDate(p.date)}: ${fmtKg(p.value)} kg` }));
+  const last = all.at(-1);
+  const before = all.findLast((p) => (now - p.date) / DAY_MS >= 28);
+  const change = last && before ? Math.round((last.value - before.value) * 10) / 10 : null;
+  return `
+    <section class="card">
+      <div class="row"><div class="eyebrow grow">Bodyweight</div><a class="small link-text" href="#body">Weigh-ins ›</a></div>
+      ${last ? `<div class="row" style="gap:8px;align-items:baseline;margin-top:6px"><b class="tile-value">${fmtKg(last.value)}</b><span class="small muted">kg</span>
+        ${change == null ? "" : `<span class="small muted">${change > 0 ? "+" : ""}${fmtKg(change)} kg in 4 weeks</span>`}</div>
+        ${lineChart(points, { from: from && points.length ? from : null })}
+        <div class="chips">${rangeChips("bw-range", range)}</div>`
+        : `<p class="small muted" style="margin:6px 0 0">No weigh-ins yet. Log one at the top of a workout or under Weigh-ins.</p>`}
+    </section>`;
+}
+
+/** The weigh-ins: a form to add one, and the list, newest first. Swiping a weigh-in to the left
+ *  reveals Delete. */
+export function bodyView() {
+  const list = weighIns().reverse();
+  const today = localIso(new Date()).slice(0, 10);
+  const body = `
+    <section class="card">
+      <div class="eyebrow">Add a weigh-in</div>
+      <div class="weigh-form" style="margin-top:8px">
+        <input class="search" type="date" id="weigh-date" value="${today}" max="${today}">
+        <input class="search num" id="weigh-kg" inputmode="decimal" placeholder="${fmtKg(bodyweight())} kg">
+        <button class="btn small primary" data-action="weigh-add">Add</button>
+      </div>
+      <p class="small muted" style="margin:8px 0 0">The latest weigh-in is the bodyweight for pull-ups, dips and other bodyweight exercises.</p>
+    </section>
+    ${list.length ? `<div class="eyebrow section-title">${plural(list.length, "weigh-in")} · swipe left to delete</div>
+    <div class="list">${list.map((w) => `
+      <div class="weigh" data-swipe>
+        <span class="grow">${fmtDate(new Date(`${w.date}T12:00:00`), { weekday: "short", day: "numeric", month: "short", year: "numeric" })}</span>
+        <b class="num">${fmtKg(w.kg)} kg</b>
+        <button class="swipe-del" data-action="weigh-del" data-date="${w.date}">Delete</button>
+      </div>`).join("")}</div>` : ""}`;
+  return { title: "Bodyweight", back: "#progress", body };
+}
+
+actions["bw-range"] = ({ v }) => { state.ui.bwRange = v; };
+actions["weigh-add"] = () => {
+  const date = document.getElementById("weigh-date").value;
+  const kg = parseFloat(document.getElementById("weigh-kg").value.replace(",", "."));
+  if (!/^\d{4}-\d\d-\d\d$/.test(date) || !(kg > 0)) {
+    toast("Enter a date and a weight");
+    return "keep";
+  }
+  return setWeight(date, Math.round(kg * 10) / 10);
+};
+actions["weigh-del"] = ({ date }) => setWeight(date, null);
 
 actions["progress-ex"] = ({ id }) => { state.ui.progressEx = id; };
 actions["progress-range"] = ({ v }) => { state.ui.progressRange = v; };
