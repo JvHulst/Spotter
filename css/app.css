@@ -307,6 +307,9 @@ button.link.danger { color: var(--danger); }
 /* Exercise detail */
 .target-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .stats.two { grid-template-columns: 1fr 1fr; }
+.rep-table > div { padding-top: 10px !important; padding-bottom: 10px !important; }
+.rep-table .rep-n { width: 40px; font-weight: 700; }
+.rep-table .at-best .rep-n, .rep-table .at-best b { color: var(--accent-text); }
 .stats.two .stat b { font-size: 20px; margin: 2px 0; }
 
 /* History */

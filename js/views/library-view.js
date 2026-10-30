@@ -84,20 +84,32 @@ function chartCard(entries, e) {
     </section>`;
 }
 
-/** Per rep count, the heaviest weight lifted for at least that many reps, and the weight that the
- *  current estimate allows for exactly that many reps to failure. */
+/**
+ * For each rep count from 1 to 12: the heaviest weight ever lifted for at least that many reps,
+ * with its date, and the estimated maximum for exactly that many reps to failure from the best
+ * estimated one-rep max, rounded to 0.5 kg. For one rep that is the estimated one-rep max itself,
+ * since the Epley formula, inverted at one rep, gives a weight just below it. A rep count whose
+ * best reaches the estimate is marked.
+ */
 function repTable(entries, e) {
   if (e.load !== "none" || !e.increment) return "";
   const r = records(entries, e, bodyweight());
-  const est = exerciseSeries(entries.slice(-1), e, bodyweight())[0].e1rm;
-  const rows = [1, 3, 5, 6, 8, 10, 12].map((n) => `
-    <div><span class="grow">${n} ${n === 1 ? "rep" : "reps"}</span>
-      <span class="num" style="width:96px;text-align:right">${r.reps.get(n) ? `${fmtKg(r.reps.get(n).value)} kg` : "–"}</span>
-      <span class="num muted" style="width:96px;text-align:right">${fmtKg(Math.round(loadFor(est, n, 0) * 2) / 2)} kg</span></div>`).join("");
+  const when = (d) => fmtDate(d, { day: "numeric", month: "short", year: "2-digit" });
+  const rows = Array.from({ length: 12 }, (_, i) => i + 1).map((n) => {
+    const best = r.reps.get(n);
+    const estimate = Math.round((n === 1 ? r.e1rm.value : loadFor(r.e1rm.value, n, 0)) * 2) / 2;
+    return `
+      <div class="${best && best.value >= estimate ? "at-best" : ""}"><span class="rep-n">${n}</span>
+        <span class="grow num">${best ? `<b>${fmtKg(best.value)} kg</b> <span class="small muted">${when(best.date)}</span>` : `<span class="muted">–</span>`}</span>
+        <span class="num muted">${fmtKg(estimate)} kg</span></div>`;
+  }).join("");
   return `
     <div class="eyebrow section-title">Rep records</div>
+    <p class="small muted" style="margin:0 4px 6px">Best is the heaviest weight you lifted for at least that many reps. Estimated is the maximum
+      for exactly that many reps to failure from your best estimated one-rep max of ${fmtKg(Math.round(r.e1rm.value * 2) / 2)} kg
+      (${fmtKg(r.e1rm.set.kg)} kg × ${r.e1rm.set.reps}, ${when(r.e1rm.date)}). Red rows are where your best has reached the estimate.</p>
     <div class="list rep-table">
-      <div class="small muted"><span class="grow">Reps</span><span style="width:96px;text-align:right">Best</span><span style="width:96px;text-align:right">Predicted</span></div>
+      <div class="small muted"><span class="rep-n">Reps</span><span class="grow">Best</span><span>Estimated</span></div>
       ${rows}</div>`;
 }
 
