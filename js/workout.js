@@ -6,7 +6,7 @@
 import { planExercise, nextSetWeight, warmupSets, finisherSets, nextTemplateId } from "./progression.js";
 import { state, exercise, pattern, bodyweight, saveActive, saveProgram, saveSessions } from "./state.js";
 import { splitWeighted } from "./strong.js";
-import { template, rotation, slotChoice, slotOptions, targetFor, restFor, ownTemplate, createTemplate, setTemplateSlots, allowsFinisher,
+import { template, rotation, dayPlan, targetFor, restFor, ownTemplate, createTemplate, setTemplateSlots, allowsFinisher,
   setSlotOption } from "./program.js";
 
 /** Rest before a finisher set, in seconds: a drop set follows once the weight is changed, and a
@@ -20,17 +20,6 @@ export function planFor(id, nSets) {
   return planExercise({
     ex: exercise(id), target: targetFor(id), history: state.index.get(id) ?? [],
     nSets, today: new Date(), bodyweight: bodyweight(),
-  });
-}
-
-/** The exercise of each slot of a training day, with no exercise in two slots. */
-export function dayPlan(t) {
-  const taken = [];
-  return t.slots.map((slot) => {
-    const choice = slotChoice(slot);
-    const id = taken.includes(choice) ? slotOptions(slot).find((x) => !taken.includes(x)) : choice;
-    taken.push(id);
-    return { slot, id };
   });
 }
 

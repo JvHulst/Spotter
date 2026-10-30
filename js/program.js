@@ -6,13 +6,15 @@
 // exercise of its pattern. Exercises of the pattern's group (data/patterns.csv) are the slot's
 // alternatives, ranked by how often they were logged.
 //
-// The stored program holds only what the user chose: the active split, their own templates
-// (`custom`), superset links of built-in slots (`slots`), per-exercise targets (`exercises`),
+// The stored program holds only what the user chose: the active split, their own templates and
+// their edited versions of built-in days (`custom`, the latter marked `fork`), superset links of
+// built-in slots (`slots`), per-exercise targets (`exercises`),
 // exercises added outside the library (`extra`), and exercises kept despite a proposed change,
 // with the time of that choice (`keep`).
 
 import { state, exercise, pattern, bodyweight } from "./state.js";
-import { exerciseSeries, stalled, runWeeks } from "./history.js";
+import { exerciseSeries, stalled, runWeeks, muscleStats } from "./history.js";
+import { MUSCLES, MINOR_MUSCLES } from "./library.js";
 import { daysBetween } from "./progression.js";
 import { WEIGHTED } from "./strong.js";
 
@@ -82,9 +84,10 @@ export function cleanProgram(raw) {
   return {
     version: 3, split: typeof p.split === "string" ? p.split : "full-body",
     custom: (p.custom ?? []).filter((t) => ID.test(t?.id) && Array.isArray(t.slots)).map((t) => ({
-      id: t.id, name: name(t.name),
+      id: t.id, name: name(t.name), ...(t.fork ? { fork: true } : {}),
       slots: t.slots.filter((s) => ID.test(s?.id) && ID.test(s.ex)).map((s) => ({ id: s.id, ex: s.ex, sets: Math.min(10, Math.max(1, Math.round(Number(s.sets)) || 3)),
-        superset: Boolean(s.superset), finisher: finisher(s.finisher), ...(s.warmup === false ? { warmup: false } : {}) })),
+        superset: Boolean(s.superset), finisher: finisher(s.finisher), ...(s.warmup === false ? { warmup: false } : {}),
+        ...(typeof s.name === "string" ? { name: s.name.slice(0, 40) } : {}) })),
     })),
     slots: Object.fromEntries(Object.entries(p.slots ?? {}).filter(([id]) => ID.test(id)).map(([id, v]) => [id, {
       ...(v?.superset != null ? { superset: Boolean(v.superset) } : {}), ...(v?.finisher != null ? { finisher: finisher(v.finisher) } : {}),
@@ -102,12 +105,13 @@ export const activeSplit = () => splits().find((s) => s.id === state.program.spl
 /** The training days of the active split, in rotation order. */
 export const rotation = () => activeSplit().days.map((d) => d.ref ?? d.id);
 
-/** A built-in day or one of the user's templates, as {id, name, custom, slots}. */
+/** A built-in day, the user's edited version of one, or one of their templates, as {id, name,
+ *  custom, fork, slots}. */
 export function template(id) {
   const own = state.program.custom.find((t) => t.id === id);
   if (own) {
-    return { id, name: own.name, custom: true, slots: own.slots.filter((s) => exercise(s.ex)).map((s) => ({
-      id: s.id, name: null, pattern: exercise(s.ex).pattern, prefer: [s.ex], sets: s.sets, superset: Boolean(s.superset),
+    return { id, name: own.name, custom: true, fork: Boolean(own.fork), slots: own.slots.filter((s) => exercise(s.ex)).map((s) => ({
+      id: s.id, name: s.name ?? null, pattern: exercise(s.ex).pattern, prefer: [s.ex], sets: s.sets, superset: Boolean(s.superset),
       finisher: s.finisher ?? "", warmup: s.warmup !== false })) };
   }
   const day = state.days.get(id);
@@ -118,16 +122,63 @@ export function template(id) {
   }) };
 }
 
-/** Exercises that can fill a slot of this pattern: the preferred ones, then the group's
- *  exercises by sessions in the last half year, then over the whole log, then by name. */
+/**
+ * Order of exercises by use: sessions in the last half year, then over the whole log, then the
+ * order of the library, which lists the common variant of each movement first.
+ */
+function byUse() {
+  const use = (id) => state.usage.get(id) ?? { recent: 0, total: 0 };
+  const order = new Map([...state.library.exercises.keys()].map((id, i) => [id, i]));
+  return (a, b) => use(b).recent - use(a).recent || use(b).total - use(a).total || order.get(a) - order.get(b);
+}
+const groupOf = (id) => state.library.patterns.get(exercise(id)?.pattern)?.group;
+
+/** Exercises that can fill a slot of this pattern: the preferred ones, then the group's exercises by use. */
 export function slotOptions({ pattern: p, prefer = [] }) {
   const group = state.library.patterns.get(p).group;
-  const use = (id) => state.usage.get(id) ?? { recent: 0, total: 0 };
-  const pool = [...state.library.exercises.values()]
-    .filter((e) => state.library.patterns.get(e.pattern)?.group === group && !prefer.includes(e.id))
-    .sort((a, b) => use(b.id).recent - use(a.id).recent || use(b.id).total - use(a.id).total
-      || (b.pattern === p) - (a.pattern === p) || a.name.localeCompare(b.name));
-  return [...prefer.filter((id) => exercise(id)), ...pool.map((e) => e.id)];
+  const pool = [...state.library.exercises.keys()].filter((id) => groupOf(id) === group && !prefer.includes(id)).sort(byUse());
+  return [...prefer.filter((id) => exercise(id)), ...pool];
+}
+
+/** The exercise of each slot of a training day, with no exercise in two slots. */
+export function dayPlan(t) {
+  const taken = [];
+  return t.slots.map((slot) => {
+    const choice = slotChoice(slot);
+    const id = taken.includes(choice) ? slotOptions(slot).find((x) => !taken.includes(x)) : choice;
+    taken.push(id);
+    return { slot, id };
+  });
+}
+
+/**
+ * The swaps for an exercise in a workout, as [[title, ids]]: exercises of the same movement
+ * pattern, then of the related patterns of its group, each by use. In a home workout only plain
+ * bodyweight exercises are offered; in a gym workout they come last among the same movement and
+ * are left out of the related ones, where a push-up is no stand-in for a press. For an isolation
+ * exercise a bonus section follows: an isolation exercise for each of the two major muscles and
+ * the one optional muscle with the fewest sets in the last 7 days, among the muscles that no
+ * exercise of the workout trains. Exercises in `exclude`, the rest of the workout, are left out.
+ */
+export function alternativeSections(ex, slot, exclude, { home = false } = {}) {
+  const own = slot?.pattern ?? exercise(ex).pattern;
+  const fits = (id) => id !== ex && !exclude.includes(id) && exercise(id).muscle !== "other" && (!home || plainBodyweight(id));
+  const all = [...state.library.exercises.keys()].filter(fits);
+  const use = byUse();
+  const order = (a, b) => (home ? 0 : plainBodyweight(a) - plainBodyweight(b)) || use(a, b);
+  const same = all.filter((id) => exercise(id).pattern === own).sort(order);
+  const similar = all.filter((id) => exercise(id).pattern !== own && groupOf(id) === groupOf(ex) && (home || !plainBodyweight(id))).sort(order);
+  const sections = [["Same movement", same], ["Similar movement", similar]];
+  if (pattern(ex).kind === "isolation") {
+    const stats = muscleStats(state.sessions, state.library, new Date());
+    const today = new Set([ex, ...exclude].map((id) => exercise(id)?.muscle));
+    const fewest = (muscles, n) => muscles.filter((m) => !today.has(m))
+      .sort((a, b) => (stats.get(a)?.sets7 ?? 0) - (stats.get(b)?.sets7 ?? 0)).slice(0, n);
+    const bonus = [...fewest(MUSCLES, 2), ...fewest(MINOR_MUSCLES, 1)]
+      .map((m) => all.filter((id) => exercise(id).muscle === m && pattern(id).kind === "isolation").sort(order)[0]).filter(Boolean);
+    sections.push(["Bonus: a muscle behind this week", bonus]);
+  }
+  return sections.filter(([, ids]) => ids.length);
 }
 
 /** A slot's exercise: the one last logged in it, else its preferred one, else the most used
@@ -137,10 +188,9 @@ export function slotChoice(slot) {
   return state.slotLast.get(slot.id) ?? options.find((id) => slot.prefer?.includes(id) || exercise(id).pattern === slot.pattern) ?? options[0];
 }
 
-/** Up to n alternatives for an exercise in a slot, leaving out the exercises in `exclude`. */
-export function alternatives(ex, slot, exclude, n = 3) {
-  const options = slotOptions(slot ?? { pattern: exercise(ex).pattern });
-  return options.filter((id) => id !== ex && !exclude.includes(id)).slice(0, n);
+/** Alternatives for an exercise in a slot, best first, leaving out the exercises in `exclude`. */
+function alternatives(ex, slot, exclude) {
+  return slotOptions(slot ?? { pattern: exercise(ex).pattern }).filter((id) => id !== ex && !exclude.includes(id));
 }
 
 /** An exercise that needs no equipment and no added weight, for workouts at home. */
@@ -168,7 +218,7 @@ export function proposeChange(id, slot, exclude, { bodyweightOnly = false } = {}
   const stall = stalled(exerciseSeries(entries, exercise(id), bodyweight()));
   const weeks = Math.floor(runWeeks(entries, today));
   if (!stall && (STRENGTH_LIFTS.has(id) || weeks < ROTATE_WEEKS)) return null;
-  const options = alternatives(id, slot, exclude, Infinity).filter((x) => !bodyweightOnly || plainBodyweight(x));
+  const options = alternatives(id, slot, exclude).filter((x) => !bodyweightOnly || plainBodyweight(x));
   const rested = (x) => {
     const last = state.index.get(x)?.at(-1)?.date;
     return last && daysBetween(last, today) >= ROTATE_WEEKS * 7;
@@ -239,6 +289,19 @@ export function setTemplateSlots(t, items) {
       ...(x.warmup === false ? { warmup: false } : {}) };
   });
 }
+/** Make a built-in day editable: an own copy with the same id and slot ids, so that it replaces
+ *  the day in its split and keeps the history of its slots. */
+export function forkDay(id) {
+  const day = template(id);
+  state.program.custom.push({ id, name: day.name, fork: true, slots: dayPlan(day).map(({ slot, id: ex }) => ({
+    id: slot.id, name: slot.name, ex, sets: slot.sets, superset: slot.superset, finisher: slot.finisher, ...(slot.warmup ? {} : { warmup: false }) })) });
+}
+
+/** Return an edited built-in day to its definition in data/splits.json. */
+export function resetDay(id) {
+  state.program.custom = state.program.custom.filter((t) => t.id !== id);
+}
+
 export function replaceTemplateSlot(t, i, ex) {
   t.slots[i] = { ...t.slots[i], id: newId(t.id), ex };
 }

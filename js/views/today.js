@@ -1,18 +1,20 @@
-// Today: the active split with its suggested training day, the user's own templates, and the
-// plan of the chosen day with each exercise's planned load. Also the template editor.
+// Today: the plan of the next training day with each exercise's planned load, and a panel for
+// every workout to choose from: the days of the active split, the user's templates and an
+// empty workout. Tapping a panel offers Start, Show plan and Edit. Also the template editor,
+// which edits the user's templates and their own versions of built-in days.
 
 import { state, exercise, saveProgram } from "../state.js";
-import { template, splits, activeSplit, rotation, ownTemplate, createTemplate, addTemplateSlot, replaceTemplateSlot,
-  allowsFinisher, FINISHERS, FINISHER_LABEL } from "../program.js";
-import { suggestedTemplateId, dayPlan, planFor, startWorkout } from "../workout.js";
+import { template, splits, activeSplit, rotation, dayPlan, ownTemplate, createTemplate, addTemplateSlot, replaceTemplateSlot,
+  forkDay, resetDay, allowsFinisher, FINISHERS, FINISHER_LABEL } from "../program.js";
+import { suggestedTemplateId, planFor, startWorkout } from "../workout.js";
 import { sessionsWithin } from "../history.js";
-import { actions, ask, esc, fmtKg, since, modeBadge, icon } from "../ui.js";
+import { actions, ask, choose, esc, fmtKg, since, modeBadge, icon } from "../ui.js";
 import { openSheet, closeSheet } from "./sheet.js";
 
 export function today() {
   const suggested = suggestedTemplateId();
-  const own = state.program.custom;
-  const chosen = [...rotation(), ...own.map((t) => t.id)].includes(state.ui.day) ? state.ui.day : suggested;
+  const own = state.program.custom.filter((x) => !x.fork);
+  const chosen = [...rotation(), ...own.map((x) => x.id)].includes(state.ui.day) ? state.ui.day : suggested;
   const t = template(chosen);
   const last = state.sessions.at(-1);
   const perWeek = sessionsWithin(state.sessions, new Date(), 28) / 4;
@@ -36,9 +38,16 @@ export function today() {
       </div>`;
   }).join("");
 
-  const chip = (id, label) => `<button class="chip ${id === t.id ? "on" : ""}" data-action="pick-day" data-id="${id}">${esc(label)}</button>`;
-  const days = rotation().map((id) => chip(id, `${template(id).name}${id === suggested ? " · next" : ""}`)).join("");
-  const mine = own.map((x) => chip(x.id, x.name)).join("");
+  const panel = (id) => {
+    const x = template(id);
+    const names = dayPlan(x).slice(0, 4).map(({ id: ex }) => esc(exercise(ex).name.replace(/ \(.*\)$/, "")));
+    return `
+      <button class="panel ${id === t.id ? "on" : ""}" data-action="panel" data-id="${id}">
+        <div class="row" style="gap:6px"><b class="grow ellipsis">${esc(x.name)}</b>${id === suggested ? `<span class="next-badge">Next</span>` : ""}</div>
+        <div class="small muted">${x.slots.length} exercises · ${x.slots.reduce((n, s) => n + s.sets, 0)} sets</div>
+        <div class="small panel-list">${names.join("<br>") || "No exercises yet"}</div>
+      </button>`;
+  };
 
   const welcome = state.sessions.length ? "" : `
     <section class="card">
@@ -60,20 +69,26 @@ export function today() {
       <span class="small link-text">${state.ui.showSplits ? "Close" : "Change"}</span>
     </button>
     ${state.ui.showSplits ? splitList() : ""}
-    <div class="chips">${days}<span class="chip-gap"></span>${mine}<button class="chip" data-action="new-template">+ Template</button></div>
-    <section class="card">
+    <section class="card" id="plan">
       <div class="row">
         <div class="grow">
-          <div class="eyebrow">${t.custom ? "Your template" : t.id === suggested ? "Next up" : "Chosen day"}</div>
+          <div class="eyebrow">${t.id === suggested ? "Next up" : "Chosen workout"}</div>
           <h2>${esc(t.name)}</h2>
         </div>
-        ${t.custom ? `<a class="btn small" href="#template-${t.id}">Edit</a>` : ""}
+        <button class="btn small" data-action="edit-workout" data-id="${t.id}">Edit</button>
       </div>
       <div class="small muted">${t.slots.length} exercises · ${t.slots.reduce((n, s) => n + s.sets, 0)} working sets</div>
       <div style="margin-top:8px">${rows || `<div class="empty">No exercises yet</div>`}</div>
       ${state.active ? "" : `<button class="btn primary block" style="margin-top:12px" data-action="start" data-id="${t.id}">Start workout</button>`}
     </section>
-    ${state.active ? "" : `<button class="btn block" data-action="start-empty">Start an empty workout</button>`}`;
+    <div class="eyebrow section-title">${esc(split.name)}</div>
+    <div class="panels">${rotation().map(panel).join("")}</div>
+    <div class="eyebrow section-title">Your workouts</div>
+    <div class="panels">
+      ${own.map((x) => panel(x.id)).join("")}
+      <button class="panel add" data-action="new-template">+ New template</button>
+      ${state.active ? "" : `<button class="panel add" data-action="start-empty">Empty workout<span class="small muted">Add exercises as you go</span></button>`}
+    </div>`;
   return { title: "Today", tab: "today", body };
 }
 
@@ -89,6 +104,31 @@ function splitList() {
       ${s.id === activeSplit().id ? `<span class="badge mode-up">Active</span>` : ""}
     </button>`).join("")}</div>`;
 }
+
+/** A tapped panel: start the workout, show its plan at the top, or edit it. */
+actions.panel = async ({ id }) => {
+  const pick = await choose(template(id).name, [
+    state.active ? { key: "resume", label: "Resume the workout in progress" } : { key: "start", label: "Start workout" },
+    { key: "plan", label: "Show the plan" },
+    { key: "edit", label: "Edit" },
+  ]);
+  if (pick === "start") return actions.start({ id });
+  if (pick === "resume") location.hash = "#workout";
+  if (pick === "plan") {
+    state.ui.day = id;
+    window.scrollTo(0, 0);
+  }
+  if (pick === "edit") return actions["edit-workout"]({ id });
+};
+
+/** Edit a template, or a built-in day through the user's own version of it. */
+actions["edit-workout"] = async ({ id }) => {
+  if (!ownTemplate(id)) {
+    forkDay(id);
+    await saveProgram();
+  }
+  location.hash = `#template-${id}`;
+};
 
 /** Editor of one of the user's templates: name, exercises with their sets, and order. */
 export function templateView(id) {
@@ -118,7 +158,9 @@ export function templateView(id) {
     <div class="list">${rows || `<div class="empty">No exercises yet</div>`}</div>
     <button class="btn block primary" data-action="tpl-add" data-id="${id}">+ Add exercise</button>
     <button class="btn block" style="margin-top:8px" data-action="start" data-id="${id}" ${state.active ? "disabled" : ""}>Start workout</button>
-    <button class="btn block danger" style="margin-top:8px" data-action="tpl-delete" data-id="${id}">Delete template</button>`;
+    ${t.fork
+      ? `<button class="btn block" style="margin-top:8px" data-action="tpl-reset" data-id="${id}">Reset to the default ${esc(t.name)}</button>`
+      : `<button class="btn block danger" style="margin-top:8px" data-action="tpl-delete" data-id="${id}">Delete template</button>`}`;
   return { title: t.name, back: "#today", body };
 }
 
@@ -185,6 +227,12 @@ actions["tpl-swap"] = ({ id, i }) => {
     pattern: state.library.patterns.get(ex?.pattern)?.label ?? "",
     pick: async (next) => { replaceTemplateSlot(t, +i, next); await saveProgram(); closeSheet(); },
   });
+};
+actions["tpl-reset"] = async ({ id }) => {
+  if (!(await ask("Undo your changes to this training day?", { ok: "Reset" }))) return;
+  resetDay(id);
+  await saveProgram();
+  location.hash = "#today";
 };
 actions["tpl-delete"] = async ({ id }) => {
   if (!(await ask("Delete this template? Logged workouts are kept.", { ok: "Delete", danger: true }))) return;

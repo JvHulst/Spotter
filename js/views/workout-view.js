@@ -4,17 +4,17 @@
 // A set row shows its type (W, a number, D or M; tapping it changes the type), its weight and reps
 // as fields to type in, its RIR (tapping it steps through 0 to 4+), and a check mark that logs or
 // undoes the set. Swiping a row to the left reveals Delete. Nothing in a card expands or
-// collapses while you train, so rows stay where they are. Everything else about an exercise sits
-// in its ⋯ menu.
+// collapses while you train, so rows stay where they are. Tapping the exercise's name drops down
+// its alternatives; everything else about an exercise sits in its ⋯ menu.
 
 import { state, exercise, bodyweight, setWeight, saveActive, saveProgram } from "../state.js";
-import { template, targetFor, alternatives, proposeChange, plainBodyweight, allowsFinisher, setTypes, FINISHER_LABEL } from "../program.js";
+import { template, targetFor, alternativeSections, proposeChange, plainBodyweight, allowsFinisher, setTypes, FINISHER_LABEL } from "../program.js";
 import { muscleStats, muscleShares } from "../history.js";
 import { MUSCLES } from "../library.js";
 import { WEEKLY_SETS_GUIDE } from "./muscles.js";
 import { logSet, undoSet, setEdited, setType, setWarmups, addSet, removeSet, removeExercise, swapExercise, addExercise, toggleSuperset,
   saveAsTemplate, updateTemplate, setFinisher, finishWorkout, discardWorkout, localIso } from "../workout.js";
-import { actions, ask, choose, esc, fmtKg, ago, setsText, icon, toast, plural } from "../ui.js";
+import { actions, ask, choose, dropdown, esc, fmtKg, ago, since, setsText, icon, toast, plural } from "../ui.js";
 import { openSheet, closeSheet } from "./sheet.js";
 
 const today = () => localIso(new Date()).slice(0, 10);
@@ -81,10 +81,10 @@ function card(entry, e) {
           <div class="eyebrow grow">${esc(slot?.name ?? ex.muscle)} · ${work} sets · ${target.reps.join("–")} reps @ RIR ${target.rir.join("–")}</div>
           <button class="icon-btn" data-action="ex-menu" data-e="${e}" aria-label="Exercise options">${icon.more}</button>
         </div>
-        <button class="name" data-action="swap" data-e="${e}">${esc(ex.name)} ${icon.swap}</button>
+        <button class="name" data-action="alts" data-e="${e}">${esc(ex.name)} ${icon.down}</button>
         <div class="last">${last ? `${ago(last.date)}: ${esc(setsText(last.sets))}` : "No history yet"}</div>
         <div class="reason mode-${entry.plan.mode}">${esc(entry.plan.reason)}</div>
-        ${changeHint(entry, e, slot)}${altChips(entry, e, slot)}
+        ${changeHint(entry, e, slot)}
       </div>
       ${rows}
       <button class="add-set" data-action="add-set" data-e="${e}">+ Set</button>
@@ -94,15 +94,6 @@ function card(entry, e) {
 
 const inWorkout = () => state.active.exercises.map((x) => x.ex);
 const bodyweightOnly = () => state.active.exercises.length > 0 && state.active.exercises.every((x) => plainBodyweight(x.ex));
-
-/** One-tap swaps to the slot's other exercises, shown until the first working set is logged. */
-function altChips(entry, e, slot) {
-  const others = alternatives(entry.ex, slot, inWorkout());
-  if (!others.length) return "";
-  const chips = others.map((id) =>
-    `<button class="chip" data-action="alt" data-e="${e}" data-id="${id}">${esc(exercise(id).name)}</button>`).join("");
-  return `<div class="chips alts">${chips}<button class="chip" data-action="swap" data-e="${e}">More…</button></div>`;
-}
 
 /** A proposed change of exercise (see proposeChange) with Switch and Keep. A workout of plain
  *  bodyweight exercises counts as training at home. */
@@ -200,11 +191,40 @@ actions["bw-today"] = (_, el) => {
   return setWeight(today(), Number.isFinite(kg) && kg > 0 ? kg : null);
 };
 
-/** The ⋯ menu of an exercise: swap, warm-up sets, finisher, note and remove. */
+/** Swap entry e to another exercise, after asking when it has logged working sets. */
+async function swapTo(e, id) {
+  const entry = state.active.exercises[e];
+  if (entry.sets.some((s) => s.done && !s.warmup)
+    && !(await ask("Logged sets of this exercise will be discarded. Swap anyway?", { ok: "Swap", danger: true }))) return;
+  return swapExercise(e, id);
+}
+
+/** The alternatives of an exercise, dropped down from its name: a proposed change first, then
+ *  the sections of alternativeSections, and a search of the whole library. */
+actions.alts = async ({ e }, el) => {
+  const entry = state.active.exercises[+e];
+  const slot = template(state.active.template)?.slots.find((s) => s.id === entry.slot);
+  const change = proposeChange(entry.ex, slot, inWorkout(), { bodyweightOnly: bodyweightOnly() });
+  const item = (id) => {
+    const last = state.index.get(id)?.at(-1)?.date;
+    return { key: id, label: exercise(id).name, sub: `${exercise(id).equipment}${last ? ` · last ${since(last)} ago` : " · new to you"}` };
+  };
+  const sections = [
+    ...(change ? [["Suggested", [{ ...item(change.to), sub: change.why, accent: true }]]] : []),
+    ...alternativeSections(entry.ex, slot, inWorkout(), { home: bodyweightOnly() })
+      .map(([title, ids]) => [title, ids.filter((id) => id !== change?.to).slice(0, 6).map(item)]),
+    ["", [{ key: "search", label: "Search all exercises…" }]],
+  ];
+  const pick = await dropdown(el, sections.filter(([, items]) => items.length));
+  if (pick === "search") return actions.swap({ e });
+  if (pick) return swapTo(+e, pick);
+};
+
+/** The ⋯ menu of an exercise: search for a swap, warm-up sets, finisher, note and remove. */
 actions["ex-menu"] = async ({ e }) => {
   const entry = state.active.exercises[+e];
   const options = [
-    { key: "swap", label: "Swap exercise" },
+    { key: "swap", label: "Search all exercises" },
     { key: "warmup", label: entry.warmup === false ? "Warm-up sets: off" : "Warm-up sets: on", on: entry.warmup !== false },
     ...(allowsFinisher(entry.ex) ? ["", "drop", "myo"].map((f) => ({ key: `fin-${f}`, label: FINISHER_LABEL[f], on: (entry.finisher ?? "") === f })) : []),
     { key: "note", label: entry.note ? "Edit note" : "Add note" },
@@ -222,7 +242,7 @@ actions["ex-menu"] = async ({ e }) => {
   }
   if (pick === "remove" && await ask("Remove this exercise from today's workout?", { ok: "Remove", danger: true })) return removeExercise(+e);
 };
-actions.alt = ({ e, id }) => swapExercise(+e, id);
+actions.alt = ({ e, id }) => swapTo(+e, id);
 actions.keep = ({ e }) => {
   state.program.keep ??= {};
   state.program.keep[state.active.exercises[+e].ex] = Date.now();
@@ -231,16 +251,10 @@ actions.keep = ({ e }) => {
 actions["add-gap"] = ({ id }) => addExercise(id);
 actions.swap = ({ e }) => {
   const entry = state.active.exercises[+e];
-  const slot = template(state.active.template)?.slots.find((s) => s.id === entry.slot);
   openSheet({
-    title: "Swap exercise",
-    first: alternatives(entry.ex, slot, inWorkout(), 12),
-    firstTitle: "Alternatives",
-    exclude: [entry.ex],
+    title: "Swap exercise", first: [], exclude: [entry.ex],
     pick: async (id) => {
-      if (entry.sets.some((s) => s.done && !s.warmup)
-        && !(await ask("Logged sets of this exercise will be discarded. Swap anyway?", { ok: "Swap", danger: true }))) return;
-      await swapExercise(+e, id);
+      await swapTo(+e, id);
       closeSheet();
     },
   });
