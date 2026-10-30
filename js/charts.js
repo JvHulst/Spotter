@@ -30,7 +30,7 @@ export const compact = (v) => (Math.abs(v) >= 1000 ? `${Math.round(v / 100) / 10
  * tappable point per value. points: [{date, value, tip}], oldest first.
  */
 export function lineChart(points, { height = 150, unit = "kg", from = null } = {}) {
-  if (points.length < 2) return `<div class="empty small">Not enough sessions in this range</div>`;
+  if (points.length < 2) return `<div class="empty small">Not enough data in this range</div>`;
   const left = 34, right = 40, top = 10, bottom = 22;
   const vals = points.map((p) => p.value);
   let lo = Math.min(...vals), hi = Math.max(...vals);
@@ -57,6 +57,46 @@ export function lineChart(points, { height = 150, unit = "kg", from = null } = {
       <text class="label" x="${x(end.date) + 8}" y="${y(end.value) + 4}">${compact(end.value)}</text>
       <text class="axis" x="${left}" y="${height - 6}">${fmt(new Date(t0))}</text>
       <text class="axis" x="${W - right}" y="${height - 6}" text-anchor="end">${fmt(end.date)}</text>
+      ${hits}
+    </svg>`;
+}
+
+/**
+ * Bodyweight: each weigh-in as a dot, the trend as a line ending in a labeled dot, and behind
+ * them a light tint for each bulk or cut phase. points: [{date, kg, trend, tip}], oldest first;
+ * phases: [{from, to, phase}] with dates.
+ */
+export function weightChart(points, phases, { height = 160, from = null } = {}) {
+  if (points.length < 2) return `<div class="empty small">Not enough data in this range</div>`;
+  const left = 34, right = 40, top = 10, bottom = 22;
+  const vals = points.flatMap((p) => [p.kg, p.trend]);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const pad = (hi - lo) * 0.12 || 1;
+  lo -= pad; hi += pad;
+  const t0 = (from ?? points[0].date).getTime(), t1 = Math.max(points.at(-1).date.getTime(), ...phases.map((b) => b.to.getTime()));
+  const x = (d) => left + ((d.getTime() - t0) / Math.max(1, t1 - t0)) * (W - left - right);
+  const y = (v) => top + (1 - (v - lo) / (hi - lo)) * (height - top - bottom);
+  const base = height - bottom;
+  const bands = phases.filter((b) => b.to > new Date(t0)).map((b) => {
+    const x0 = x(new Date(Math.max(b.from, t0))), x1 = x(b.to);
+    return `<rect class="phase ${b.phase}" x="${x0.toFixed(1)}" y="${top}" width="${Math.max(0, x1 - x0).toFixed(1)}" height="${base - top}"/>`;
+  }).join("");
+  const grid = ticks(lo, hi).map((v) => `
+    <line class="grid" x1="${left}" x2="${W - right}" y1="${y(v)}" y2="${y(v)}"/>
+    <text class="axis" x="${left - 6}" y="${y(v) + 3.5}" text-anchor="end">${compact(v)}</text>`).join("");
+  const line = points.map((p, i) => `${i ? "L" : "M"}${x(p.date).toFixed(1)},${y(p.trend).toFixed(1)}`).join("");
+  const dots = points.map((p) => `<circle class="raw" cx="${x(p.date).toFixed(1)}" cy="${y(p.kg).toFixed(1)}" r="2.5"/>`).join("");
+  const hits = points.map((p) => `<circle class="hit" cx="${x(p.date)}" cy="${y(p.kg)}" r="10" data-tip="${esc(p.tip)}"/>`).join("");
+  const end = points.at(-1);
+  const fmt = (d) => fmtDate(d, { month: "short", year: "2-digit" });
+  return `
+    <svg class="chart" viewBox="0 0 ${W} ${height}" role="img" aria-label="Bodyweight with trend, last trend ${end.trend.toFixed(1)} kg">
+      ${bands}${grid}${dots}
+      <path class="line" d="${line}"/>
+      <circle class="dot" cx="${x(end.date)}" cy="${y(end.trend)}" r="4"/>
+      <text class="label" x="${x(end.date) + 8}" y="${y(end.trend) + 4}">${end.trend.toFixed(1)}</text>
+      <text class="axis" x="${left}" y="${height - 6}">${fmt(new Date(t0))}</text>
+      <text class="axis" x="${W - right}" y="${height - 6}" text-anchor="end">${fmt(new Date(t1))}</text>
       ${hits}
     </svg>`;
 }

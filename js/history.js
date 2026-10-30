@@ -198,6 +198,23 @@ export function muscleStats(sessions, library, today) {
   return stats;
 }
 
+/** Share of the gap to a new weigh-in that the trend closes per day, as in Walker's Hacker's
+ *  Diet: the trend moves 10% of the way toward each day's weight. */
+const TREND_PER_DAY = 0.1;
+
+/** The trend of weigh-ins [{date, kg}], oldest first: an exponentially weighted average that
+ *  closes 1 − 0.9^d of the gap over a gap of d days. Returns [{date, kg, trend}]. */
+export function weightTrend(list) {
+  let trend = null, prev = null;
+  return list.map((w) => {
+    const date = new Date(`${w.date}T12:00:00`);
+    const days = prev ? Math.max(1, daysBetween(prev, date)) : 0;
+    trend = trend == null ? w.kg : trend + (1 - (1 - TREND_PER_DAY) ** days) * (w.kg - trend);
+    prev = date;
+    return { date, kg: w.kg, trend };
+  });
+}
+
 /** Monday 00:00 of the week holding a date. */
 export function weekStart(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));

@@ -1,7 +1,7 @@
 // Service worker: keeps the app usable offline. Files are served from the cache and refreshed
 // from the network in the background, so a new version is picked up on the next launch.
 
-const CACHE = "spotter-v5";
+const CACHE = "spotter-v7";
 const SHELL = [
   "./", "index.html", "manifest.webmanifest", "css/app.css",
   "js/app.js", "js/charts.js", "js/db.js", "js/history.js", "js/library.js", "js/program.js", "js/progression.js",

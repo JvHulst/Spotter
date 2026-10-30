@@ -2,13 +2,13 @@
 
 import { state, loadState, saveActive } from "./state.js";
 import { persist } from "./db.js";
-import { actions, esc, icon, fmtClock, showTip } from "./ui.js";
+import { actions, esc, icon, fmtClock, markPoint } from "./ui.js";
 import { today, templateView, settingsLink } from "./views/today.js";
 import { workoutView } from "./views/workout-view.js";
 import { historyView, sessionView } from "./views/log.js";
 import { libraryView, exerciseView } from "./views/library-view.js";
 import { musclesView } from "./views/muscles.js";
-import { progressView, bodyView } from "./views/progress.js";
+import { progressView, bodyView, trackedView } from "./views/progress.js";
 import { settingsView, applyTheme } from "./views/settings.js";
 import { startSync } from "./sync.js";
 import { sheetHtml } from "./views/sheet.js";
@@ -29,6 +29,7 @@ function route() {
     case "muscles": return musclesView();
     case "progress": return progressView();
     case "body": return bodyView();
+    case "tracked": return trackedView();
     case "template": return templateView(id);
     case "setup": return settingsView();
     default: return today();
@@ -40,6 +41,7 @@ export function render() {
   const workout = location.hash === "#workout";
   const nav = workout ? "" : `<nav class="tabs">${TABS.map(([tab, href, label]) =>
     `<a href="${href}" class="${view.tab === tab ? "on" : ""}">${icon[tab]}${label}</a>`).join("")}</nav>`;
+  document.querySelector(".tip")?.remove();
   root.innerHTML = `
     <header class="top">
       ${view.back ? `<a class="back" href="${view.back}">‹ Back</a>` : ""}
@@ -75,7 +77,7 @@ document.addEventListener("click", (event) => {
   }
   closeSwipes();
   const tip = event.target.closest("[data-tip]");
-  if (tip) return showTip(tip);
+  if (tip) return markPoint(tip);
   const el = event.target.closest("[data-action]");
   if (!el || (el.dataset.self && event.target !== el)) return;
   event.preventDefault();
@@ -117,6 +119,23 @@ document.addEventListener("touchmove", (event) => {
     swipe = null;
   }
 }, { passive: true });
+
+// --- Charts: moving a finger or pointer across a chart marks the value nearest to it ---------
+
+document.addEventListener("pointermove", (event) => {
+  const chart = event.target.closest?.("svg.chart");
+  if (!chart || (event.pointerType === "mouse" && !event.buttons)) return;
+  let nearest = null, best = Infinity;
+  for (const el of chart.querySelectorAll("[data-tip]")) {
+    const r = el.getBoundingClientRect();
+    const d = Math.abs(r.left + r.width / 2 - event.clientX);
+    if (d < best) [nearest, best] = [el, d];
+  }
+  if (nearest && !nearest.classList.contains("marked")) {
+    markPoint(nearest);
+    nearest.classList.add("marked");
+  }
+});
 
 // --- Rest timer ---------------------------------------------------------------------------
 

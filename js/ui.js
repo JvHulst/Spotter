@@ -86,6 +86,34 @@ export function ask(message, { ok = "OK", danger = false, text = null } = {}) {
   });
 }
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/**
+ * Mark a value of a chart: a vertical line through it, a dot on it for a point (not for a
+ * column), and its data-tip above it. A heatmap cell gets an outline instead. One value per
+ * chart is marked at a time.
+ */
+export function markPoint(el) {
+  const svg = el.ownerSVGElement;
+  document.querySelectorAll(".marked").forEach((m) => m.classList.remove("marked"));
+  document.querySelector(".tip")?.remove();
+  if (!svg) {
+    el.classList.add("marked");
+    return showTip(el);
+  }
+  const point = el.tagName === "circle";
+  const x = point ? +el.getAttribute("cx") : +el.getAttribute("x") + +el.getAttribute("width") / 2;
+  const height = svg.viewBox.baseVal.height;
+  const make = (cls, tag) => svg.querySelector(`.${cls}`) ?? svg.insertBefore(Object.assign(document.createElementNS(SVG_NS, tag), {}), svg.querySelector(".hit"));
+  const cross = make("cross", "line");
+  cross.setAttribute("class", "cross");
+  Object.entries({ x1: x, x2: x, y1: 6, y2: height - 20 }).forEach(([k, v]) => cross.setAttribute(k, v));
+  const dot = make("mark", "circle");
+  dot.setAttribute("class", "mark");
+  Object.entries({ cx: x, cy: point ? el.getAttribute("cy") : -20, r: 5 }).forEach(([k, v]) => dot.setAttribute(k, v));
+  showTip(el);
+}
+
 /** Show an element's data-tip above it until the next tap. */
 export function showTip(el) {
   const r = el.getBoundingClientRect();

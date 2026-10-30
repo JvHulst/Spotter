@@ -9,8 +9,9 @@
 // The stored program holds only what the user chose: the active split, their own templates and
 // their edited versions of built-in days (`custom`, the latter marked `fork`), superset links of
 // built-in slots (`slots`), per-exercise targets (`exercises`),
-// exercises added outside the library (`extra`), and exercises kept despite a proposed change,
-// with the time of that choice (`keep`).
+// exercises added outside the library (`extra`), exercises kept despite a proposed change,
+// with the time of that choice (`keep`), diet phases with their start dates (`phases`), and the
+// exercises chosen for the one-rep-max dashboard (`tracked`).
 
 import { state, exercise, pattern, bodyweight } from "./state.js";
 import { exerciseSeries, stalled, runWeeks, muscleStats } from "./history.js";
@@ -31,7 +32,10 @@ const HOME = { id: "home", name: "Home", slots: [
   ["pull-up", 4], ["push-up", 4], ["dip", 3], ["inverted-row-bodyweight", 3], ["bulgarian-split-squat-bodyweight", 3],
 ].map(([ex, sets]) => ({ id: `home-${ex}`, ex, sets })) };
 
-export const defaultProgram = () => ({ version: 3, split: "full-body", custom: [structuredClone(HOME)], slots: {}, exercises: {}, extra: [], keep: {} });
+export const defaultProgram = () => ({ version: 3, split: "full-body", custom: [structuredClone(HOME)], slots: {}, exercises: {}, extra: [], keep: {}, phases: [] });
+
+/** Diet phases, each from its date until the next one. */
+export const PHASES = { maintain: "Maintain", bulk: "Bulk", cut: "Cut" };
 
 /** Built-in training days by id, with slot ids made of the day id and the slot's pattern. */
 export function builtinDays(library) {
@@ -96,6 +100,9 @@ export function cleanProgram(raw) {
     extra: (p.extra ?? []).filter((e) => ID.test(e?.id)).map((e) => ({ id: e.id, name: name(e.name), muscle: "other", pattern: "other",
       equipment: "other", load: "none", increment: Number.isFinite(e.increment) ? e.increment : 2.5, aliases: "" })),
     keep: Object.fromEntries(Object.entries(p.keep ?? {}).filter(([id, at]) => ID.test(id) && Number.isFinite(at))),
+    ...(Array.isArray(p.tracked) ? { tracked: p.tracked.filter((id) => ID.test(id)).slice(0, 20) } : {}),
+    phases: (Array.isArray(p.phases) ? p.phases : []).filter((x) => /^\d{4}-\d\d-\d\d$/.test(x?.date) && PHASES[x.phase])
+      .map((x) => ({ date: x.date, phase: x.phase })),
     ...(Number.isFinite(p.updatedAt) ? { updatedAt: p.updatedAt } : {}),
   };
 }

@@ -178,7 +178,8 @@ async function restore(doc) {
   }
   const sessions = (Array.isArray(doc.sessions) ? doc.sessions : []).map(cleanSession).filter((s) => s && !state.deleted[s.id]);
   if (sessions.length) await saveSessions(sessions);
-  return [...parts, plural(sessions.length, "workout")].join(" and ");
+  if (sessions.length) parts.push(plural(sessions.length, "workout"));
+  return parts.join(" and ") || "nothing new";
 }
 
 actions.export = async () => {
