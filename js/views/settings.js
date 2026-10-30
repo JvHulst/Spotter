@@ -1,9 +1,9 @@
 // Settings: sync, import and backup, bodyweight, rest timer defaults and theme.
 
 import { state, saveSettings, saveProgram, saveSessions, addCustomExercises, reindex, cleanSettings, cleanDeleted, cleanWeights,
-  storeWeights, bodyweight, DEFAULT_SETTINGS } from "../state.js";
+  storeWeights, bodyweight, hooks, DEFAULT_SETTINGS } from "../state.js";
 import { kv, backup, clearAll } from "../db.js";
-import { defaultProgram, cleanProgram } from "../program.js";
+import { defaultProgram, cleanProgram, CATEGORY_LABEL } from "../program.js";
 import { cleanSession } from "../history.js";
 import { parseCsv, strongSessions } from "../strong.js";
 import { connect, disconnect, sync, syncStatus } from "../sync.js";
@@ -39,7 +39,8 @@ export function settingsView() {
       <label class="btn primary block">Import
         <input type="file" accept=".csv,text/csv,.json,application/json" multiple hidden data-change="import"></label>
       <p class="small muted">A Strong export (in Strong: Settings, Export Strong Data) adds its workouts; importing it again
-        updates them. A Spotter backup restores everything it holds.</p>
+        updates them. A CSV file with the columns <code>date</code> (as 2025-12-21) and <code>kg</code> adds weigh-ins.
+        A Spotter backup restores everything it holds.</p>
       <button class="btn block" data-action="export">Export backup</button>
     </section>
     <a class="card row" href="#body" style="text-decoration:none;color:inherit">
@@ -47,6 +48,17 @@ export function settingsView() {
         <div class="small muted">${state.latestWeight ? `${fmtKg(bodyweight())} kg, weighed ${state.latestWeight.date}` : "No weigh-ins yet"}</div></div>
       <span class="small link-text">Weigh-ins ›</span>
     </a>
+    <section class="card">
+      <div class="eyebrow">Rep ranges and reps in reserve</div>
+      <p class="small muted" style="margin:6px 0 2px">Heavy compounds are barbell compounds such as squat, bench press, deadlift and rows.
+        Other compounds use machines, cables, dumbbells or bodyweight. Failure (RIR 0) is fine for those and for isolations,
+        and costs too much under a heavy bar.</p>
+      ${Object.entries(s.ranges).map(([k, r]) => `
+        <div class="range-row">
+          <b>${CATEGORY_LABEL[k]}</b>
+          ${rangeStepper(k, "reps", r.reps, "reps")}${rangeStepper(k, "rir", r.rir, "RIR")}
+        </div>`).join("")}
+    </section>
     <section class="card">
       <div class="eyebrow">Rest timer</div>
       ${rest("restCompound", "Compound")}${rest("restIsolation", "Isolation")}
@@ -59,6 +71,15 @@ export function settingsView() {
     </section>
     <button class="btn block danger" data-action="wipe">Delete all data on this device</button>`;
   return { title: "Settings", back: "#today", body };
+}
+
+/** Steppers for the low and high end of a category's rep or RIR range. */
+function rangeStepper(category, key, [lo, hi], label) {
+  const button = (end, d, text) => `<button data-action="range-step" data-c="${category}" data-k="${key}" data-end="${end}" data-d="${d}" aria-label="${text}">${d < 0 ? "−" : "+"}</button>`;
+  return `<div class="range-step"><span class="small muted">${label}</span>
+    <div class="mini-stepper">${button(0, -1, "Lower the low end")}<span class="num">${lo}</span>${button(0, 1, "Raise the low end")}</div>
+    <span class="muted">–</span>
+    <div class="mini-stepper">${button(1, -1, "Lower the high end")}<span class="num">${hi}</span>${button(1, 1, "Raise the high end")}</div></div>`;
 }
 
 function syncCard() {
@@ -118,14 +139,37 @@ actions["sync-off"] = async () => {
   status = null;
 };
 
-/** Read Strong exports (CSV) and Spotter backups (JSON). */
+/** Weigh-ins from CSV rows with a date column (YYYY-MM-DD) and a kg or weight column, as a map
+ *  from date to {kg, at}; null when the rows have no such columns. */
+function weightRows(rows) {
+  const keys = Object.keys(rows[0] ?? {});
+  const date = keys.find((k) => /^date$/i.test(k));
+  const kg = keys.find((k) => /^(kg|weight|weight ?\(?kg\)?)$/i.test(k));
+  if (!date || !kg) return null;
+  const out = {};
+  for (const r of rows) {
+    const value = parseFloat(String(r[kg]).replace(",", "."));
+    if (/^\d{4}-\d\d-\d\d$/.test(r[date]) && value > 0) out[r[date]] = { kg: Math.round(value * 10) / 10, at: 0 };
+  }
+  return out;
+}
+
+/** Read Strong exports and weigh-ins (CSV) and Spotter backups (JSON). Imported weigh-ins only
+ *  fill dates that have none yet, so importing a file twice changes nothing. */
 actions.import = async (_, input) => {
   const parts = [];
   try {
     for (const file of input.files) {
       const text = await file.text();
-      if (/\.csv$/i.test(file.name) || !text.trimStart().startsWith("{")) {
-        const { sessions: all, extra } = strongSessions(parseCsv(text), state.library);
+      const rows = /\.csv$/i.test(file.name) || !text.trimStart().startsWith("{") ? parseCsv(text) : null;
+      const weights = rows && weightRows(rows);
+      if (weights) {
+        await storeWeights({ ...weights, ...state.weights });
+        reindex();
+        hooks.changed();
+        parts.push(plural(Object.keys(weights).length, "weigh-in"));
+      } else if (rows) {
+        const { sessions: all, extra } = strongSessions(rows, state.library);
         if (!all.length) throw new Error(`${file.name} holds no Strong workouts`);
         const sessions = all.filter((s) => !state.deleted[s.id]);
         if (extra.length) await addExtra(extra);
@@ -193,6 +237,15 @@ actions.export = async () => {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
+};
+
+actions["range-step"] = ({ c, k, end, d }) => {
+  const range = [...state.settings.ranges[c][k]];
+  const [min, max] = k === "reps" ? [1, 30] : [0, 5];
+  range[+end] = Math.min(max, Math.max(min, range[+end] + +d));
+  if (range[0] > range[1]) return;
+  state.settings.ranges = { ...state.settings.ranges, [c]: { ...state.settings.ranges[c], [k]: range } };
+  return saveSettings();
 };
 
 actions["rest-step"] = ({ key, d }) => {

@@ -10,7 +10,7 @@ Spotter opens on the Today tab, which plans your next workout. The History, Prog
 
 1. Open the app in Safari, tap Share, then Add to Home Screen, and from then on open Spotter from the home screen. The home-screen app keeps its own storage, so workouts logged in a Safari tab do not appear in it.
 2. To bring in your history from the Strong app, export it there (Settings, Export Strong Data) and choose Import in Spotter's Settings. Importing a newer export later adds the new workouts and updates the ones already imported, without duplicates. Exercise names that Spotter does not know become new exercises, and drop sets marked in Strong stay drop sets.
-3. Log your current bodyweight on the Weigh-ins page, which the Weigh-ins link of the bodyweight card in the Progress tab opens. Later weigh-ins can also go in the bodyweight field at the top of a workout. The weigh-in with the latest date counts toward the load of pull-ups, dips and other bodyweight exercises.
+3. Log your current bodyweight on the Weigh-ins page, which the Weigh-ins link of the bodyweight card in the Progress tab opens. To bring in earlier weigh-ins, import a CSV file with the columns `date` (as 2025-12-21) and `kg` in Settings. Later weigh-ins can also go in the bodyweight field at the top of a workout. The weigh-in with the latest date counts toward the load of pull-ups, dips and other bodyweight exercises.
 
 To keep a copy of your data or to use a second device, set up sync on this phone next (see Sync and privacy).
 
@@ -52,9 +52,15 @@ Isolation exercises, where failure costs little recovery, can also end with a fi
 
 ## How sets are planned
 
-Spotter uses double progression: the reps go up first, then the weight. Each exercise has a rep range and a target RIR, such as 6–10 reps at RIR 1–2. Sets closer to failure add growth but not strength (Robinson et al. 2024, Sports Med. 54:2209), so isolation sets aim for RIR 0–1. Compound sets aim for RIR 1–2, because failure on a heavy multi-joint lift costs more fatigue and risks a failed rep under the bar.
+Spotter uses double progression: the reps go up first, then the weight. Each exercise has a rep range and a target RIR, set per category of exercise in Settings.
 
-Squat, bench press and deadlift train at 4–6 reps, so that the app also builds strength on these three lifts. Heavy loads build more maximal strength, while growth is similar across loads when sets end near failure (Schoenfeld, Grgic, Ogborn & Krieger 2017, J. Strength Cond. Res. 31:3508). So the low range adds strength at no cost in growth. Every other exercise takes the higher range of its pattern, such as 6–10 or 10–15, so a leg press in the squat slot keeps the leg-press range. The Library page of an exercise changes its rep range and target RIR.
+| Category | Exercises | Reps | RIR |
+| --- | --- | --- | --- |
+| Heavy compounds | compound exercises with a barbell, such as squat, bench press, deadlift and barbell rows | 5–8 | 1–2 |
+| Other compounds | compound exercises on machines and cables, with dumbbells or with bodyweight | 8–12 | 0–1 |
+| Isolations | exercises for one joint, such as curls, lateral raises and leg extensions | 10–20 | 0–1 |
+
+Heavy loads build more maximal strength, while growth is similar across loads when sets end near failure (Schoenfeld, Grgic, Ogborn & Krieger 2017, J. Strength Cond. Res. 31:3508). So the low range of the heavy compounds builds strength on the barbell lifts at no cost in growth, and the other categories use higher ranges. Sets closer to failure add growth but not strength (Robinson et al. 2024, Sports Med. 54:2209). Failure costs little on a machine, a cable or an isolation exercise, so those sets may go to failure (RIR 0). Under a heavy bar, failure costs much more fatigue and risks a failed rep, so heavy compounds stop one or two reps short. The category belongs to the exercise, so a leg press in the squat slot trains in the range of other compounds. The Library page of an exercise sets its own weight step and rest time.
 
 The stall rule in Training days, the rule for a break below, and the Progress tab use an estimated one-rep max. Spotter computes it with the Epley formula (Epley 1985, Boyd Epley Workout, Body Enterprises), counting the reps in reserve as reps that could have been done. A set of `w` kg for `r` reps at RIR `q` gives `w (1 + (r + q) / 30)`, so 100 kg for 8 reps at RIR 2 gives about 133 kg. Sets without a logged RIR, such as most sets from Strong, count as RIR 1.
 
@@ -92,7 +98,7 @@ Without sync, Export backup in Settings saves all data to one file. The same Imp
 
 ## Exercise data
 
-The exercises, movement patterns and splits are defined in data files, so changing them needs no code. `data/exercises.csv` lists the exercises with their main `muscle`, movement `pattern`, `equipment`, `increment` (the weight step in kg that the plan uses), and other names (`aliases`, separated by `|`) for matching Strong exports. Its `load` column says how bodyweight counts: `none` for external weight only, `add` for bodyweight plus the logged weight, and `subtract` for bodyweight minus assistance. `data/patterns.csv` gives each pattern its rep range (`reps_low` and `reps_high`), its `kind` (compound or isolation, which sets the target RIR, the rest and the warm-ups), its alternatives `group` and its `secondary` muscles. `data/splits.json` defines the splits, and `js/program.js` the Home template.
+The exercises, movement patterns and splits are defined in data files, so changing them needs no code. `data/exercises.csv` lists the exercises with their main `muscle`, movement `pattern`, `equipment`, `increment` (the weight step in kg that the plan uses), and other names (`aliases`, separated by `|`) for matching Strong exports. Its `load` column says how bodyweight counts: `none` for external weight only, `add` for bodyweight plus the logged weight, and `subtract` for bodyweight minus assistance. `data/patterns.csv` gives each pattern its `kind` (compound or isolation, which with the equipment sets the category, the rest and the warm-ups), its alternatives `group` and its `secondary` muscles. `data/splits.json` defines the splits, and `js/program.js` the Home template.
 
 ## Development
 

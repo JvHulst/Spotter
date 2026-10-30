@@ -1,10 +1,27 @@
-// Small SVG charts in the app's accent color. Every mark that carries a value has a `data-tip`
-// with its label, which a tap shows as a tooltip (see showTip in ui.js). Charts draw in a fixed
+// Small SVG charts in the app's accent color. Above each line or column chart, a readout shows
+// the value under the finger and its date, and the latest value otherwise. Every mark carries
+// its value and date as data-v and data-l (see markPoint in ui.js); heatmap cells carry a
+// `data-tip` that a tap shows as a tooltip. Charts draw in a fixed
 // viewBox and scale to the card width, so text keeps its proportions.
 
 import { esc, fmtDate } from "./ui.js";
 
 const W = 320;
+
+/** The value and date of a tip "date: value", for a mark's data-v and data-l. */
+const parts = (tip) => {
+  const i = tip.indexOf(": ");
+  return i < 0 ? [tip, ""] : [tip.slice(i + 2), tip.slice(0, i)];
+};
+const marks = (tip) => {
+  const [v, l] = parts(tip);
+  return `data-v="${esc(v)}" data-l="${esc(l)}"`;
+};
+/** A chart with its readout, which shows `latest` until a value is marked. */
+const boxed = (svg, latest) => {
+  const [v, l] = parts(latest);
+  return `<div class="chart-box"><div class="readout"><b>${esc(v)}</b><span>${esc(l)}</span></div>${svg}</div>`;
+};
 
 /** Time ranges of the charts, in days. */
 export const RANGES = { "3M": 91, "1Y": 365, All: Infinity };
@@ -46,9 +63,9 @@ export function lineChart(points, { height = 150, unit = "kg", from = null } = {
     <line class="grid" x1="${left}" x2="${W - right}" y1="${y(v)}" y2="${y(v)}"/>
     <text class="axis" x="${left - 6}" y="${y(v) + 3.5}" text-anchor="end">${compact(v)}</text>`).join("");
   const end = points.at(-1);
-  const hits = points.map((p) => `<circle class="hit" cx="${x(p.date)}" cy="${y(p.value)}" r="10" data-tip="${esc(p.tip)}"/>`).join("");
+  const hits = points.map((p) => `<circle class="hit" cx="${x(p.date)}" cy="${y(p.value)}" r="10" ${marks(p.tip)}/>`).join("");
   const fmt = (d) => fmtDate(d, { month: "short", year: "2-digit" });
-  return `
+  return boxed(`
     <svg class="chart" viewBox="0 0 ${W} ${height}" role="img" aria-label="Line chart, last value ${Math.round(end.value)} ${unit}">
       ${grid}
       <path class="area" d="${area}"/>
@@ -58,7 +75,7 @@ export function lineChart(points, { height = 150, unit = "kg", from = null } = {
       <text class="axis" x="${left}" y="${height - 6}">${fmt(new Date(t0))}</text>
       <text class="axis" x="${W - right}" y="${height - 6}" text-anchor="end">${fmt(end.date)}</text>
       ${hits}
-    </svg>`;
+    </svg>`, end.tip);
 }
 
 /**
@@ -86,10 +103,10 @@ export function weightChart(points, phases, { height = 160, from = null } = {}) 
     <text class="axis" x="${left - 6}" y="${y(v) + 3.5}" text-anchor="end">${compact(v)}</text>`).join("");
   const line = points.map((p, i) => `${i ? "L" : "M"}${x(p.date).toFixed(1)},${y(p.trend).toFixed(1)}`).join("");
   const dots = points.map((p) => `<circle class="raw" cx="${x(p.date).toFixed(1)}" cy="${y(p.kg).toFixed(1)}" r="2.5"/>`).join("");
-  const hits = points.map((p) => `<circle class="hit" cx="${x(p.date)}" cy="${y(p.kg)}" r="10" data-tip="${esc(p.tip)}"/>`).join("");
+  const hits = points.map((p) => `<circle class="hit" cx="${x(p.date)}" cy="${y(p.kg)}" r="10" ${marks(p.tip)}/>`).join("");
   const end = points.at(-1);
   const fmt = (d) => fmtDate(d, { month: "short", year: "2-digit" });
-  return `
+  return boxed(`
     <svg class="chart" viewBox="0 0 ${W} ${height}" role="img" aria-label="Bodyweight with trend, last trend ${end.trend.toFixed(1)} kg">
       ${bands}${grid}${dots}
       <path class="line" d="${line}"/>
@@ -98,7 +115,7 @@ export function weightChart(points, phases, { height = 160, from = null } = {}) 
       <text class="axis" x="${left}" y="${height - 6}">${fmt(new Date(t0))}</text>
       <text class="axis" x="${W - right}" y="${height - 6}" text-anchor="end">${fmt(new Date(t1))}</text>
       ${hits}
-    </svg>`;
+    </svg>`, end.tip);
 }
 
 /** Columns from one baseline, labeled every `every` columns, the last one highlighted.
@@ -119,9 +136,9 @@ export function barChart(bars, { height = 130, every = 4 } = {}) {
     const r = Math.min(4, h / 2, bw / 2);
     const shape = h <= 0 ? "" : `<path class="${i === bars.length - 1 ? "bar now" : "bar"}" d="M${x0},${base}V${base - h + r}q0,-${r} ${r},-${r}h${bw - 2 * r}q${r},0 ${r},${r}V${base}Z"/>`;
     const label = (bars.length - 1 - i) % every === 0 ? `<text class="axis" x="${x0 + bw / 2}" y="${height - 6}" text-anchor="middle">${esc(b.label)}</text>` : "";
-    return `${shape}${label}<rect class="hit" x="${left + i * band}" y="${top}" width="${band}" height="${base - top}" data-tip="${esc(b.tip)}"/>`;
+    return `${shape}${label}<rect class="hit" x="${left + i * band}" y="${top}" width="${band}" height="${base - top}" ${marks(b.tip)}/>`;
   }).join("");
-  return `<svg class="chart" viewBox="0 0 ${W} ${height}" role="img" aria-label="Column chart">${grid}${cols}</svg>`;
+  return boxed(`<svg class="chart" viewBox="0 0 ${W} ${height}" role="img" aria-label="Column chart">${grid}${cols}</svg>`, bars.at(-1).tip);
 }
 
 /** A small trend line without axes, for tiles. values: numbers, oldest first. */

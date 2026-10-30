@@ -261,7 +261,11 @@ button.link.danger { color: var(--danger); }
 .chart .bar { fill: color-mix(in srgb, var(--chart) 72%, var(--surface)); }
 .chart .bar.now { fill: var(--chart); }
 .chart .hit { fill: transparent; }
-.chart { touch-action: pan-y; }
+.chart { touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.chart-box { margin-top: 6px; }
+.readout { display: flex; align-items: baseline; gap: 8px; min-height: 26px; }
+.readout b { font-size: 18px; letter-spacing: -0.01em; }
+.readout span { font-size: 13px; color: var(--muted); }
 .chart .cross { stroke: var(--text); stroke-width: 1; opacity: 0.45; }
 .chart .mark { fill: var(--chart); stroke: var(--text); stroke-width: 2; }
 .hm-cell.marked { outline: 2px solid var(--text); outline-offset: 1px; }
@@ -360,6 +364,10 @@ button.link.danger { color: var(--danger); }
 .tpl-name { text-align: left; font-weight: 600; }
 .mini-stepper { display: flex; align-items: center; gap: 2px; background: var(--surface-2); border-radius: 10px; }
 .mini-stepper button { width: 32px; height: 32px; font-size: 18px; color: var(--accent-text); }
+.range-row { padding: 10px 0 4px; border-top: 1px solid var(--line); margin-top: 8px; }
+.range-row b { display: block; margin-bottom: 6px; }
+.range-step { display: inline-flex; align-items: center; gap: 6px; margin: 0 14px 6px 0; }
+.range-step > .small { width: 34px; }
 .mini-stepper span { min-width: 18px; padding: 0 2px; text-align: center; font-weight: 700; font-size: 14px; }
 .weigh-form { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .weigh-form input { width: 100%; min-width: 0; }

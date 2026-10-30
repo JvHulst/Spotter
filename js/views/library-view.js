@@ -2,7 +2,7 @@
 // targets and its recent sessions.
 
 import { state, exercise, pattern, bodyweight, saveProgram } from "../state.js";
-import { targetFor, restFor } from "../program.js";
+import { targetFor, restFor, exerciseCategory, CATEGORY_LABEL } from "../program.js";
 import { exerciseSeries, records } from "../history.js";
 import { loadFor } from "../progression.js";
 import { MUSCLES, MINOR_MUSCLES } from "../library.js";
@@ -123,9 +123,9 @@ function targetsCard(id, e) {
   return `
     <section class="card">
       <div class="eyebrow">Targets</div>
+      <p class="small" style="margin:6px 0 4px">${CATEGORY_LABEL[exerciseCategory(id)]}: ${t.reps.join("–")} reps at RIR ${t.rir.join("–")}.
+        <a class="link-text" href="#setup">Change in Settings</a></p>
       <div class="target-grid">
-        ${stepper("repsLo", t.reps[0], "Reps from")}${stepper("repsHi", t.reps[1], "Reps to")}
-        ${stepper("rirLo", t.rir[0], "RIR from")}${stepper("rirHi", t.rir[1], "RIR to")}
         ${stepper("increment", fmtKg(e.increment), "Step (kg)")}
         ${stepper("rest", fmtClock(restFor(id)), "Rest")}
       </div>
@@ -139,9 +139,9 @@ function recentList(entries) {
       <div class="small muted">${esc(setsText(x.sets))}</div></div></a>`).join("")}</div>`;
 }
 
-/** Store a change to an exercise's program entry, creating the entry from its defaults if needed. */
+/** Store a change to an exercise's weight step or rest time in the program. */
 function updateTarget(id, change) {
-  state.program.exercises[id] = { ...targetFor(id), ...state.program.exercises[id], ...change };
+  state.program.exercises[id] = { ...state.program.exercises[id], ...change };
   return saveProgram();
 }
 
@@ -154,14 +154,8 @@ actions["lib-search"] = (_, el) => {
 actions["ex-metric"] = ({ v }) => { state.ui.exMetric = v; };
 actions["ex-range"] = ({ v }) => { state.ui.exRange = v; };
 actions["target-step"] = ({ id, key, d }) => {
-  const t = targetFor(id);
   const step = +d;
-  const [rLo, rHi] = t.reps, [iLo, iHi] = t.rir;
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-  if (key === "repsLo") return updateTarget(id, { reps: [clamp(rLo + step, 1, rHi - 1), rHi] });
-  if (key === "repsHi") return updateTarget(id, { reps: [rLo, clamp(rHi + step, rLo + 1, 50)] });
-  if (key === "rirLo") return updateTarget(id, { rir: [clamp(iLo + step, 0, iHi), iHi] });
-  if (key === "rirHi") return updateTarget(id, { rir: [iLo, clamp(iHi + step, iLo, 5)] });
   if (key === "rest") return updateTarget(id, { restSec: clamp(restFor(id) + 15 * step, 15, 600) });
   if (key === "increment") {
     const now = exercise(id).increment;

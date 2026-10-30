@@ -8,7 +8,7 @@
 //
 // The stored program holds only what the user chose: the active split, their own templates and
 // their edited versions of built-in days (`custom`, the latter marked `fork`), superset links of
-// built-in slots (`slots`), per-exercise targets (`exercises`),
+// built-in slots (`slots`), per-exercise weight steps and rest times (`exercises`),
 // exercises added outside the library (`extra`), exercises kept despite a proposed change,
 // with the time of that choice (`keep`), diet phases with their start dates (`phases`), and the
 // exercises chosen for the one-rep-max dashboard (`tracked`).
@@ -19,14 +19,24 @@ import { MUSCLES, MINOR_MUSCLES } from "./library.js";
 import { daysBetween } from "./progression.js";
 import { WEIGHTED } from "./strong.js";
 
-/** Squat, bench press and deadlift are trained for strength as well as size. Heavy loads build
- *  more one-rep-max strength than light ones, while growth is similar across loads when sets end
- *  near failure (Schoenfeld et al. 2017, J. Strength Cond. Res. 31:3508). */
+/** Squat, bench press and deadlift: the lifts trained for strength as well as size. */
 export const STRENGTH_LIFTS = new Set(["squat-barbell", "bench-press-barbell", "deadlift-barbell"]);
-const STRENGTH_REPS = [4, 6];
-/** Target RIR by pattern kind. Sets closer to failure add growth but not strength (Robinson et al.
- *  2024, Sports Med. 54:2209), and isolation sets can end closer to failure at little cost. */
-const RIR_BY_KIND = { compound: [1, 2], isolation: [0, 1] };
+
+/**
+ * The category of an exercise, which sets its rep range and target RIR (settings.ranges): heavy
+ * compounds with a barbell, other compounds (machines, cables, dumbbells, bodyweight), and
+ * isolations. Heavy loads build more maximal strength while growth is similar across loads when
+ * sets end near failure (Schoenfeld et al. 2017, J. Strength Cond. Res. 31:3508), so only barbell
+ * compounds use low reps. Sets closer to failure add growth but not strength (Robinson et al.
+ * 2024, Sports Med. 54:2209), and failure costs little on a machine or an isolation exercise but
+ * much fatigue and risk under a heavy bar, so only barbell compounds stop short of it.
+ */
+export function exerciseCategory(id) {
+  const ex = exercise(id);
+  if (pattern(id).kind === "isolation") return "isolation";
+  return ex.equipment === "barbell" && ex.load === "none" ? "heavy" : "compound";
+}
+export const CATEGORY_LABEL = { heavy: "Heavy compounds", compound: "Other compounds", isolation: "Isolations" };
 
 const HOME = { id: "home", name: "Home", slots: [
   ["pull-up", 4], ["push-up", 4], ["dip", 3], ["inverted-row-bodyweight", 3], ["bulgarian-split-squat-bodyweight", 3],
@@ -71,7 +81,6 @@ export function migrateProgram(p) {
 
 const ID = /^[\w.:-]{1,80}$/;
 const finisher = (v) => (v === "drop" || v === "myo" ? v : "");
-const pair = (v) => (Array.isArray(v) && v.length === 2 && v.every(Number.isFinite) ? v : undefined);
 
 /** A program from outside the app, such as a backup file, in the current form with every
  *  field checked; ids may only hold letters, digits and . : _ -. */
@@ -81,7 +90,7 @@ export function cleanProgram(raw) {
   const exercises = {};
   for (const [id, t] of Object.entries(p.exercises ?? {})) {
     if (!ID.test(id) || !t) continue;
-    exercises[id] = Object.fromEntries(Object.entries({ reps: pair(t.reps), rir: pair(t.rir),
+    exercises[id] = Object.fromEntries(Object.entries({
       increment: Number.isFinite(t.increment) ? t.increment : undefined, restSec: Number.isFinite(t.restSec) ? t.restSec : undefined })
       .filter(([, v]) => v !== undefined));
   }
@@ -256,12 +265,8 @@ export function setSlotOption(templateId, slotId, key, value) {
 }
 export const FINISHER_LABEL = { "": "No finisher", drop: "Drop set", myo: "Myo-reps" };
 
-/** Rep range and target RIR of an exercise: its program entry, else the defaults above. */
-export function targetFor(id) {
-  const own = state.program?.exercises?.[id];
-  const p = pattern(id);
-  return { reps: own?.reps ?? (STRENGTH_LIFTS.has(id) ? STRENGTH_REPS : p.reps), rir: own?.rir ?? RIR_BY_KIND[p.kind] };
-}
+/** Rep range and target RIR of an exercise: those of its category (see exerciseCategory). */
+export const targetFor = (id) => state.settings.ranges[exerciseCategory(id)];
 
 /** Rest after a working set of an exercise, in seconds. */
 export function restFor(id) {

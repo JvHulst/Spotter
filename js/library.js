@@ -19,7 +19,7 @@ export async function loadLibrary() {
   return {
     exercises: new Map(exercises.map((e) => [e.id, { ...e, increment: Number(e.increment) }])),
     patterns: new Map(patterns.map((p) => [p.pattern, {
-      ...p, reps: [Number(p.reps_low), Number(p.reps_high)], group: p.group || p.pattern,
+      ...p, group: p.group || p.pattern,
       secondary: p.secondary ? p.secondary.split("|").map((m) => [m.split(":")[0], Number(m.split(":")[1] ?? 0.5)]) : [],
     }])),
     splits,

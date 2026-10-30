@@ -10,11 +10,22 @@ import { splitWeighted } from "./strong.js";
  *  2024, Front. Sports Act. Living 6:1429789); heavy compound lifts get a little more. */
 export const DEFAULT_SETTINGS = {
   restCompound: 120, restIsolation: 90, restSuperset: 45, restWarmup: 60, theme: "dark", bodyweight: 80,
+  ranges: {
+    heavy: { reps: [5, 8], rir: [1, 2] },
+    compound: { reps: [8, 12], rir: [0, 1] },
+    isolation: { reps: [10, 20], rir: [0, 1] },
+  },
 };
 
-/** Settings from outside the app: known keys with values of the default's type. */
+/** Settings from outside the app: known keys with values of the default's type, and for each
+ *  category of `ranges` a rep range and an RIR range of two whole numbers. */
 export function cleanSettings(s = {}) {
   const out = Object.fromEntries(Object.entries(DEFAULT_SETTINGS).map(([k, v]) => [k, typeof s?.[k] === typeof v ? s[k] : v]));
+  const pair = (v) => Array.isArray(v) && v.length === 2 && v.every(Number.isInteger) && v[0] <= v[1];
+  out.ranges = Object.fromEntries(Object.entries(DEFAULT_SETTINGS.ranges).map(([k, d]) => {
+    const r = s?.ranges?.[k];
+    return [k, pair(r?.reps) && pair(r?.rir) ? { reps: r.reps, rir: r.rir } : d];
+  }));
   return Number.isFinite(s?.updatedAt) ? { ...out, updatedAt: s.updatedAt } : out;
 }
 /** Deleted session ids from outside the app, as a map from id to the time of deletion. */
@@ -48,7 +59,7 @@ export async function loadState() {
     loadLibrary(), kv.get("program"), kv.get("body"), kv.get("settings"), kv.get("active"), sessionStore.all(), kv.get("deleted"), kv.get("weights"),
   ]);
   Object.assign(state, { library, days: builtinDays(library), active: active ?? null, sessions, deleted: deleted ?? {} });
-  state.settings = { ...DEFAULT_SETTINGS, ...settings };
+  state.settings = cleanSettings(settings ?? {});
   addCustomExercises(program?.extra);
   state.program = program ? migrateProgram(program) : defaultProgram();
   state.weights = weights ?? {};

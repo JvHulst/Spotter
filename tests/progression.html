@@ -137,10 +137,10 @@ const hostile = cleanSession({ id: "a", start: "2026-01-01T10:00:00", name: 7, d
 check("clean: bad exercise ids are dropped and numbers converted", hostile.exercises, [{ ex: "squat-barbell", sets: [{ kg: 0, reps: 0, rir: 1 }] }]);
 check("clean: text fields get defaults", [hostile.name, hostile.durationMin], ["Workout", null]);
 const prog = cleanProgram({ version: 2, split: "ppl", custom: [{ id: "t-1", name: "<b>", slots: [{ id: "s1", ex: "dip", sets: 99 }, { id: "s2", ex: "<x>" }] }, { id: "<x>", slots: [] }],
-  extra: [{ id: "custom-a", name: "A", muscle: "<script>", load: "add" }], exercises: { "bench-press-barbell": { reps: [4, 6], rir: "x" } } });
+  extra: [{ id: "custom-a", name: "A", muscle: "<script>", load: "add" }], exercises: { "bench-press-barbell": { reps: [4, 6], rir: "x", increment: 2.5, restSec: "y" } } });
 check("clean: program templates keep only valid ids", prog.custom, [{ id: "t-1", name: "<b>", slots: [{ id: "s1", ex: "dip", sets: 10, superset: false, finisher: "" }] }]);
 check("clean: extra exercises get fixed fields", prog.extra[0].muscle + prog.extra[0].load, "othernone");
-check("clean: targets keep only valid values", prog.exercises, { "bench-press-barbell": { reps: [4, 6] } });
+check("clean: exercise settings keep only a valid step and rest", prog.exercises, { "bench-press-barbell": { increment: 2.5 } });
 
 const pullups = [{ exercises: [{ ex: "pull-up", sets: [{ kg: 0, reps: 8, warmup: true }, { kg: 10, reps: 6 }] }] },
   { exercises: [{ ex: "pull-up", sets: [{ kg: 0, reps: 12 }] }] }];

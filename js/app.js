@@ -76,7 +76,7 @@ document.addEventListener("click", (event) => {
     return event.preventDefault();
   }
   closeSwipes();
-  const tip = event.target.closest("[data-tip]");
+  const tip = event.target.closest("[data-tip], svg.chart [data-v]");
   if (tip) return markPoint(tip);
   const el = event.target.closest("[data-action]");
   if (!el || (el.dataset.self && event.target !== el)) return;
@@ -120,22 +120,21 @@ document.addEventListener("touchmove", (event) => {
   }
 }, { passive: true });
 
-// --- Charts: moving a finger or pointer across a chart marks the value nearest to it ---------
+// --- Charts: touching a chart and moving sideways marks the value nearest to the finger ------
 
-document.addEventListener("pointermove", (event) => {
+function scrub(event) {
   const chart = event.target.closest?.("svg.chart");
   if (!chart || (event.pointerType === "mouse" && !event.buttons)) return;
   let nearest = null, best = Infinity;
-  for (const el of chart.querySelectorAll("[data-tip]")) {
+  for (const el of chart.querySelectorAll("[data-v]")) {
     const r = el.getBoundingClientRect();
     const d = Math.abs(r.left + r.width / 2 - event.clientX);
     if (d < best) [nearest, best] = [el, d];
   }
-  if (nearest && !nearest.classList.contains("marked")) {
-    markPoint(nearest);
-    nearest.classList.add("marked");
-  }
-});
+  if (nearest && !nearest.classList.contains("marked")) markPoint(nearest);
+}
+document.addEventListener("pointerdown", scrub);
+document.addEventListener("pointermove", scrub);
 
 // --- Rest timer ---------------------------------------------------------------------------
 
