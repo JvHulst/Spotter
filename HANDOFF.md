@@ -63,7 +63,22 @@ Web push through the service worker plus a free Cloudflare Worker; the user runs
 ### 6. Adversarial security review
 Attack the repository and the web app: sync key handling, token storage, CSP, import parsing, service worker cache poisoning, XSS through exercise names and notes.
 
-### 7. Smaller items
+### 7. Set-number adaptation: cascade versus algorithm suggestions
+Two mechanisms currently both write the gray prefilled numbers: the cascade in `carry.js` (editing one set updates later gray sets with the same numbers) and the algorithm's replanning after a completed set (`replan` in `workout.js`). They can conflict. Intended behavior: completing a set (the checkmark) triggers the algorithm's suggestion, which takes priority; a manual edit without completing triggers the cascade. Decide whether the cascade is still needed at all, or whether it should be a per-template option ("adaptive numbers" on or off). This is a design decision with the user; resolve it together with item 1 so that one place owns the behavior.
+
+### 8. Interface work
+- **Drag feedback.** Reordering gives poor visual feedback. The dragged item should follow the finger visually (lifted, shadow), with a visible gap where it will land. Applies to workouts, the template editor and the tracked list ([reorder.js](./js/reorder.js)).
+- **Minimize gesture.** Add a natural gesture for minimizing the workout (for example swipe down on the workout header) and for restoring it from the mini bar.
+- **Visual consistency pass.** Go through every screen for alignment, spacing, type scale and consistency between components. Numbers must not shift neighbors when a digit is added: use tabular numerals and fixed-width columns for kg, reps, 1RM and timers.
+- **Muscles tab.** Too much text at the top; cut it down without dropping needed information.
+- **Confetti.** Show it whenever a workout is completed, not only for a new 1RM record on the big three.
+- **Library terminology.** The exercise list row reads "Bench press (barbell) 137 / e1RM kg": the unit is misplaced and "e1RM" is used only there while the rest of the app says "1RM". Use one term everywhere (with the unit directly after the number, for example "137 kg") and define it once.
+
+### 9. Sounds and myo availability
+- **Sounds.** Remove "bruh" and "air horn": the synthesized versions do not sound like what they are named after. Keep sounds that are genuinely what they claim to be (the bell, the supplied FAHHH recording) and add real recordings of funny or plain sounds. Only ship files with a license that permits it. Files live in `sounds/`; the picker is in [settings.js](./js/views/settings.js) and playback in [sounds.js](./js/sounds.js).
+- **Myo sets.** Myo reps can currently be chosen only for certain exercises. Make them available wherever they make sense, and state the rule in one place (see item 1 for where such rules should live).
+
+### 10. Smaller items
 - Keyboard alternative to dragging.
 - Persist a reordered workout back to slot order for built-in days (only supersets are stored now).
 - Click-test confetti and the history set-type picker.
