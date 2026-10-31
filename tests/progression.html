@@ -6,7 +6,7 @@
 import { e1rm, planExercise, nextSetWeight, warmupSets, finisherSets, nextTemplateId } from "../js/progression.js";
 import { indexByExercise, sessionRecords, stalled, records, muscleShares, weeklyStats, cleanSession, setCount } from "../js/history.js";
 import { cleanProgram } from "../js/program.js";
-import { parseCsv, strongSessions, splitWeighted } from "../js/strong.js";
+import { parseCsv, csvKind, weighIns, strongSessions, splitWeighted } from "../js/strong.js";
 import { encrypt, decrypt, deriveKey, stable } from "../js/sync.js";
 
 const results = [];
@@ -130,6 +130,10 @@ check("strong: marked warm-up, RPE and failure set", s0.exercises[0].sets, [{ kg
 check("strong: unmarked ramp-up set becomes a warm-up", s0.exercises[1].sets.map((x) => Boolean(x.warmup)), [true, false]);
 check("strong: unknown names become new exercises", imported.extra.map((e) => e.id), ["custom-zercher-squat"]);
 check("strong: drop sets keep their type", s0.exercises[2].sets.map((x) => x.type ?? null), [null, "drop"]);
+check("csv kind: a Strong export is not read as weigh-ins", csvKind(parseCsv(csv)), "strong");
+check("csv kind: date and kg columns are weigh-ins", csvKind(parseCsv("date,kg\n2025-12-21,80.5")), "weights");
+check("csv kind: unknown columns", csvKind(parseCsv("a,b\n1,2")), null);
+check("weigh-ins: comma decimals, semicolons and timestamps", weighIns(parseCsv("Date;Weight\n2025-12-21 07:30:00;80,54\n21-12-2025;70")), { "2025-12-21": { kg: 80.5, at: 0 } });
 
 check("clean: a session id with markup is rejected", cleanSession({ id: '"><img src=x onerror=alert(1)>', start: "2026-01-01T10:00:00", exercises: [] }), null);
 const hostile = cleanSession({ id: "a", start: "2026-01-01T10:00:00", name: 7, durationMin: "<i>", exercises: [

@@ -5,7 +5,7 @@ import { state, saveSettings, saveProgram, saveSessions, addCustomExercises, rei
 import { kv, backup, clearAll } from "../db.js";
 import { defaultProgram, cleanProgram, CATEGORY_LABEL } from "../program.js";
 import { cleanSession } from "../history.js";
-import { parseCsv, strongSessions } from "../strong.js";
+import { parseCsv, csvKind, weighIns, strongSessions } from "../strong.js";
 import { connect, disconnect, sync, syncStatus } from "../sync.js";
 import { actions, ask, esc, fmtClock, fmtKg, plural, toast, ago } from "../ui.js";
 
@@ -139,21 +139,6 @@ actions["sync-off"] = async () => {
   status = null;
 };
 
-/** Weigh-ins from CSV rows with a date column (YYYY-MM-DD) and a kg or weight column, as a map
- *  from date to {kg, at}; null when the rows have no such columns. */
-function weightRows(rows) {
-  const keys = Object.keys(rows[0] ?? {});
-  const date = keys.find((k) => /^date$/i.test(k));
-  const kg = keys.find((k) => /^(kg|weight|weight ?\(?kg\)?)$/i.test(k));
-  if (!date || !kg) return null;
-  const out = {};
-  for (const r of rows) {
-    const value = parseFloat(String(r[kg]).replace(",", "."));
-    if (/^\d{4}-\d\d-\d\d$/.test(r[date]) && value > 0) out[r[date]] = { kg: Math.round(value * 10) / 10, at: 0 };
-  }
-  return out;
-}
-
 /** Read Strong exports and weigh-ins (CSV) and Spotter backups (JSON). Imported weigh-ins only
  *  fill dates that have none yet, so importing a file twice changes nothing. */
 actions.import = async (_, input) => {
@@ -162,13 +147,16 @@ actions.import = async (_, input) => {
     for (const file of input.files) {
       const text = await file.text();
       const rows = /\.csv$/i.test(file.name) || !text.trimStart().startsWith("{") ? parseCsv(text) : null;
-      const weights = rows && weightRows(rows);
-      if (weights) {
+      const kind = rows && csvKind(rows);
+      if (rows && !kind) throw new Error(`${file.name} is neither a Strong export nor a weigh-in file with date and kg columns`);
+      if (kind === "weights") {
+        const weights = weighIns(rows);
+        if (!Object.keys(weights).length) throw new Error(`${file.name} holds no weigh-ins (dates must read as 2025-12-21)`);
         await storeWeights({ ...weights, ...state.weights });
         reindex();
         hooks.changed();
         parts.push(plural(Object.keys(weights).length, "weigh-in"));
-      } else if (rows) {
+      } else if (kind === "strong") {
         const { sessions: all, extra } = strongSessions(rows, state.library);
         if (!all.length) throw new Error(`${file.name} holds no Strong workouts`);
         const sessions = all.filter((s) => !state.deleted[s.id]);

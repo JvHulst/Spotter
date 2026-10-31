@@ -35,6 +35,30 @@ export function parseCsv(text) {
   return body.map((r) => Object.fromEntries(header.map((k, i) => [k.trim(), (r[i] ?? "").trim()])));
 }
 
+/** What a CSV holds: "strong" for a Strong export (recognized by its set columns), "weights" for
+ *  weigh-ins (a date column and a kg or weight column), and null otherwise. */
+export function csvKind(rows) {
+  const keys = Object.keys(rows[0] ?? {});
+  if (keys.includes("Set Order") && keys.includes("Exercise Name")) return "strong";
+  return keys.some((k) => /^date$/i.test(k)) && keys.some((k) => WEIGHT_COLUMN.test(k)) ? "weights" : null;
+}
+
+const WEIGHT_COLUMN = /^(kg|weight|weight ?\(?kg\)?)$/i;
+
+/** Weigh-ins from the rows of a weigh-in CSV, as a map from date (YYYY-MM-DD, optionally followed
+ *  by a time) to {kg, at}. Rows without a valid date or positive weight are skipped. */
+export function weighIns(rows) {
+  const keys = Object.keys(rows[0] ?? {});
+  const date = keys.find((k) => /^date$/i.test(k)), kg = keys.find((k) => WEIGHT_COLUMN.test(k));
+  const out = {};
+  for (const r of rows) {
+    const value = parseFloat(String(r[kg]).replace(",", "."));
+    const day = /^\d{4}-\d\d-\d\d(?!\d)/.exec(r[date])?.[0];
+    if (day && value > 0) out[day] = { kg: Math.round(value * 10) / 10, at: 0 };
+  }
+  return out;
+}
+
 /** Bodyweight exercises and their weighted variants. The plain exercise progresses by reps and
  *  the weighted one by load, so a logged exercise with added weight is the weighted variant. */
 export const WEIGHTED = { "pull-up": "weighted-pull-up", "wide-pull-up": "weighted-pull-up", "chin-up": "weighted-chin-up",
