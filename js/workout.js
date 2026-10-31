@@ -8,10 +8,8 @@ import { state, exercise, pattern, bodyweight, saveActive, saveProgram, saveSess
 import { splitWeighted } from "./strong.js";
 import { template, rotation, dayPlan, targetFor, restFor, ownTemplate, createTemplate, setTemplateSlots, allowsFinisher,
   setSlotOption } from "./program.js";
-
-/** Rest before a finisher set, in seconds: a drop set follows once the weight is changed, and a
- *  myo-reps mini-set after about five deep breaths. */
-const FINISHER_REST = { drop: 10, myo: 15 };
+import { afterSet, firstOpen as firstOpenIn } from "./rest.js";
+import { carryDown } from "./carry.js";
 
 export const suggestedTemplateId = () => nextTemplateId(rotation(), state.sessions);
 
@@ -52,24 +50,12 @@ export async function startWorkout(templateId) {
   await saveActive();
 }
 
-/** The first set not yet logged, scanning entries from `from` onward and wrapping around. */
-function firstOpen(from = 0) {
-  const list = state.active.exercises;
-  for (let k = 0; k < list.length; k++) {
-    const e = (from + k) % list.length;
-    const s = list[e].sets.findIndex((x) => !x.done);
-    if (s >= 0) return { e, s };
-  }
-  return null;
-}
+const firstOpen = (from = 0) => firstOpenIn(state.active.exercises, from);
 
-/** Index of the entry paired with entry e in a superset, or -1. */
-export function partnerOf(e) {
-  const list = state.active.exercises;
-  if (list[e]?.superset && list[e + 1]) return e + 1;
-  if (list[e - 1]?.superset) return e - 1;
-  return -1;
-}
+/** Whether the workout follows a built-in day (or none), whose choices are adaptive and whose
+ *  changes are stored as per-slot overrides. A template of the user's own is stored only by
+ *  Save as template and Update template. */
+export const adaptive = () => !template(state.active.template)?.custom;
 
 /**
  * Set the weights of an entry's open working sets from its plan and its logged sets. Each logged
@@ -97,20 +83,7 @@ function replan(entry) {
   });
 }
 
-/** Give entry e another finisher, replacing its open finisher sets, and store it in the slot. */
-export async function setFinisher(e, kind) {
-  const entry = state.active.exercises[e];
-  const base = entry.sets.filter((x) => !x.warmup && !x.type).at(-1);
-  entry.finisher = kind;
-  entry.sets = [...entry.sets.filter((x) => !x.type || x.done),
-    ...(base ? finisherSets(kind, base.kg, base.planReps ?? base.reps, exercise(entry.ex)).map((s) => ({ ...s, done: false })) : [])];
-  setSlotOption(state.active.template, entry.slot, "finisher", kind);
-  state.active.focus = firstOpen(e);
-  await saveProgram();
-  await saveActive();
-}
-
-/** Turn the warm-up sets of entry e on or off, and store the choice in the slot. */
+/** Turn the warm-up sets of entry e on or off, and store the choice in the slot of a built-in day. */
 export async function setWarmups(e, on) {
   const entry = state.active.exercises[e];
   const first = entry.sets.find((x) => !x.warmup && !x.type);
@@ -126,8 +99,12 @@ export async function setWarmups(e, on) {
   await saveActive();
 }
 
-/** Make set s of entry e a working set (""), a warm-up, a drop set or a myo-reps mini-set. */
-export function setType(e, s, type) {
+/**
+ * Make set s of entry e a working set (""), a warm-up, a drop set or a myo-reps mini-set. A drop
+ * set or myo-reps mini-set is the exercise's finisher: the exercise keeps the type of its first
+ * such set, and a built-in day's slot stores it, so that the next workout plans the same finisher.
+ */
+export async function setType(e, s, type) {
   const entry = state.active.exercises[e];
   const set = entry.sets[s];
   delete set.warmup;
@@ -135,40 +112,27 @@ export function setType(e, s, type) {
   if (type === "warmup") Object.assign(set, { warmup: true, rir: null });
   else if (type) Object.assign(set, { type, rir: 0 });
   else set.rir ??= targetFor(entry.ex).rir[0];
+  entry.finisher = entry.sets.find((x) => x.type)?.type ?? "";
   replan(entry);
-  return saveActive();
+  if (allowsFinisher(entry.ex)) {
+    setSlotOption(state.active.template, entry.slot, "finisher", entry.finisher);
+    await saveProgram();
+  }
+  await saveActive();
 }
 
 /**
  * Log set s of entry e with the shown values, adjust the remaining sets, choose the next set
- * and start the rest period. In a superset the focus alternates between the two exercises,
- * with a short rest inside a round and the full rest after it.
+ * and start the rest period (see afterSet for the rules).
  */
 export async function logSet(e, s) {
   const entry = state.active.exercises[e];
-  const set = entry.sets[s];
-  set.done = true;
+  entry.sets[s].done = true;
   replan(entry);
-
-  const partner = partnerOf(e);
-  const partnerOpen = partner >= 0 && state.active.exercises[partner].sets.some((x) => !x.done && !x.warmup);
-  const next = entry.sets[s + 1];
-  let rest;
-  if (next && !next.done && next.type) {
-    // A finisher follows its set directly, also inside a superset.
-    state.active.focus = { e, s: s + 1 };
-    rest = FINISHER_REST[next.type];
-  } else if (set.warmup) {
-    state.active.focus = firstOpen(e);
-    rest = state.settings.restWarmup;
-  } else if (partnerOpen) {
-    state.active.focus = { e: partner, s: state.active.exercises[partner].sets.findIndex((x) => !x.done) };
-    rest = partner > e ? state.settings.restSuperset : Math.max(restFor(entry.ex), restFor(state.active.exercises[partner].ex));
-  } else {
-    state.active.focus = firstOpen(e);
-    rest = restFor(entry.ex);
-  }
-  state.active.rest = state.active.focus ? { endsAt: Date.now() + rest * 1000, total: rest } : null;
+  const { settings } = state;
+  const next = afterSet(state.active.exercises, e, s, { warmup: settings.restWarmup, superset: settings.restSuperset, of: restFor });
+  state.active.focus = next?.focus ?? null;
+  state.active.rest = next ? { endsAt: Date.now() + next.rest * 1000, total: next.rest } : null;
   await saveActive();
 }
 
@@ -179,6 +143,12 @@ export function undoSet(e, s) {
   replan(entry);
   Object.assign(state.active, { focus: { e, s }, rest: null });
   return saveActive();
+}
+
+/** Type a weight or reps value into set s of entry e (see carryDown) and recompute the open sets. */
+export function editSet(e, s, field, value) {
+  carryDown(state.active.exercises[e].sets, s, field, value);
+  return setEdited(e);
 }
 
 /** Recompute the open sets after an edit of a logged set. */
@@ -193,6 +163,22 @@ export function swapExercise(e, id) {
   state.active.exercises[e] = { ...entryFor(id, slot, old.sets.filter((x) => !x.warmup).length), slot: old.slot, superset: old.superset };
   state.active.focus = firstOpen(e);
   return saveActive();
+}
+
+/** Move the exercise at position `from` to position `to`. Superset links that the move would split or tangle are cleared. */
+export async function moveExercise(from, to) {
+  if (from === to) return;
+  const list = state.active.exercises;
+  const focused = list[state.active.focus?.e];
+  const [entry] = list.splice(from, 1);
+  const prev = list[from - 1];
+  if (prev?.superset) prev.superset = false;
+  entry.superset = false;
+  list.splice(to, 0, entry);
+  if (list[to - 1]) list[to - 1].superset = false;
+  if (focused) state.active.focus.e = list.indexOf(focused);
+  await storeSupersets();
+  await saveActive();
 }
 
 export function addExercise(id) {
@@ -240,17 +226,18 @@ export async function toggleSuperset(e) {
     if (list[e + 1]) list[e + 1].superset = false;
   }
   list[e].superset = on;
-  const t = state.active.template && template(state.active.template);
-  if (t) {
-    const own = ownTemplate(t.id);
-    for (const slot of t.slots) {
-      const linked = list.some((x) => x.slot === slot.id && x.superset);
-      if (own) own.slots.find((x) => x.id === slot.id).superset = linked;
-      else state.program.slots[slot.id] = { ...state.program.slots[slot.id], superset: linked };
-    }
-    await saveProgram();
-  }
+  await storeSupersets();
   await saveActive();
+}
+
+/** Store the supersets of the workout in the slots of a built-in day, so the next workout of
+ *  that day pairs the same exercises. */
+async function storeSupersets() {
+  const list = state.active.exercises;
+  const t = state.active.template && template(state.active.template);
+  if (!t || t.custom) return;
+  for (const slot of t.slots) setSlotOption(t.id, slot.id, "superset", list.some((x) => x.slot === slot.id && x.superset));
+  await saveProgram();
 }
 
 const templateItems = () => state.active.exercises.map((x) => ({

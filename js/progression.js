@@ -86,9 +86,8 @@ export function planExercise({ ex, target, history, nSets, today, bodyweight: bw
     const kg = snapToGrid(topKg, Math.min(topLoad, loadFor(now, mid, rirHi)), ex, bw, { round: Math.floor });
     const reps = clamp(Math.floor(repsFor(now, effectiveLoad(kg, ex, bw), rirHi)), lo, hi);
     const change = Math.round((1 - effectiveLoad(kg, ex, bw) / topLoad) * 100);
-    const away = gap < 63 ? `${Math.round(gap / 7)} weeks` : `${Math.round(gap / 30.4)} months`;
     return { mode: "return", sets: sets(kg, reps), rir: rirHi,
-      reason: `${away} since last time: ${change > 0 ? `${change}% lighter` : "same weight"}, ${reps} reps at RIR ${rirHi}` };
+      reason: `Back after a break: ${change > 0 ? `${change}% lighter` : "same weight"}, ${reps} reps at RIR ${rirHi}` };
   }
 
   const byLoad = ex.increment > 0;
@@ -159,8 +158,8 @@ export function finisherSets(kind, kg, reps, ex) {
   return [];
 }
 
-/** Fractions of the working weight that warm-up sets aim for. */
-const WARMUP_STEPS = { compound: [0.5, 0.7, 0.85], isolation: [0.6] };
+/** Fractions of the working weight that warm-up sets of a compound exercise aim for. */
+const WARMUP_STEPS = [0.5, 0.7, 0.85];
 /** Reps of a warm-up set by its fraction of the working weight: more reps when lighter. */
 const warmupReps = (fraction) => (fraction < 0.6 ? 8 : fraction < 0.8 ? 5 : 3);
 const BAR = 20;
@@ -186,7 +185,8 @@ function plateLoadings(kg) {
 }
 
 /**
- * Ramp-up sets before the working sets.
+ * Ramp-up sets before the working sets of a compound exercise. Isolation exercises get none,
+ * since their loads are too light to need a ramp.
  *
  * A barbell exercise starts with the empty bar. The next warm-ups are the loads on the way to
  * the working weight when its plates go on largest first, so each warm-up only adds plates. Of
@@ -195,15 +195,15 @@ function plateLoadings(kg) {
  * their increment.
  */
 export function warmupSets(workKg, ex, kind) {
-  if (!workKg || ex.load !== "none" || !ex.increment) return [];
-  const targets = WARMUP_STEPS[kind].map((f) => f * workKg);
+  if (kind !== "compound" || !workKg || ex.load !== "none" || !ex.increment) return [];
+  const targets = WARMUP_STEPS.map((f) => f * workKg);
   let loads;
   if (ex.equipment === "barbell") {
     if (workKg <= BAR) return [];
     const options = plateLoadings(workKg).map((plates) => {
       const steps = plates.slice(0, -1).map((_, i) => BAR + 2 * plates.slice(0, i + 1).reduce((a, b) => a + b, 0)).filter((kg) => kg < workKg);
       const nearest = (t) => steps.reduce((best, kg) => (best == null || Math.abs(kg - t) < Math.abs(best - t) ? kg : best), null);
-      const chosen = kind === "compound" ? targets.map(nearest).filter((kg) => kg != null) : [];
+      const chosen = targets.map(nearest).filter((kg) => kg != null);
       const miss = targets.reduce((sum, t) => sum + Math.min(Math.abs((nearest(t) ?? BAR) - t), Math.abs(BAR - t)), 0);
       return { loads: [BAR, ...new Set(chosen)].sort((a, b) => a - b), miss };
     });

@@ -1,5 +1,5 @@
 // Today: the plan of the next training day with each exercise's planned load, and a panel for
-// every workout to choose from: the days of the active split, the user's templates and an
+// every other workout to choose from: the days of the active split, the user's templates and an
 // empty workout. Tapping a panel offers Start, Show plan and Edit. Also the template editor,
 // which edits the user's templates and their own versions of built-in days.
 
@@ -9,6 +9,7 @@ import { template, splits, activeSplit, rotation, dayPlan, ownTemplate, createTe
 import { suggestedTemplateId, planFor, startWorkout } from "../workout.js";
 import { sessionsWithin } from "../history.js";
 import { actions, ask, choose, esc, fmtKg, since, modeBadge, icon } from "../ui.js";
+import { moveItem } from "../reorder.js";
 import { openSheet, closeSheet } from "./sheet.js";
 
 export function today() {
@@ -19,12 +20,6 @@ export function today() {
   const last = state.sessions.at(-1);
   const perWeek = sessionsWithin(state.sessions, new Date(), 28) / 4;
   const split = activeSplit();
-
-  const resume = state.active ? `
-    <a class="card row" href="#workout" style="text-decoration:none;color:inherit">
-      <div class="grow"><div class="eyebrow">In progress</div><h2>${esc(state.active.name)}</h2></div>
-      <span class="btn primary">Resume</span>
-    </a>` : "";
 
   const rows = dayPlan(t).map(({ slot, id }) => {
     const plan = planFor(id, slot.sets);
@@ -42,7 +37,7 @@ export function today() {
     const x = template(id);
     const names = dayPlan(x).slice(0, 4).map(({ id: ex }) => esc(exercise(ex).name.replace(/ \(.*\)$/, "")));
     return `
-      <button class="panel ${id === t.id ? "on" : ""}" data-action="panel" data-id="${id}">
+      <button class="panel" data-action="panel" data-id="${id}">
         <div class="row" style="gap:6px"><b class="grow ellipsis">${esc(x.name)}</b>${id === suggested ? `<span class="next-badge">Next</span>` : ""}</div>
         <div class="small muted">${x.slots.length} exercises · ${x.slots.reduce((n, s) => n + s.sets, 0)} sets</div>
         <div class="small panel-list">${names.join("<br>") || "No exercises yet"}</div>
@@ -57,11 +52,10 @@ export function today() {
     </section>`;
 
   const body = `
-    ${resume}${welcome}
-    <div class="stats">
+    ${welcome}
+    <div class="stats two">
       <div class="stat"><b class="num">${!last ? "–" : since(new Date(last.start)) === "0 d" ? "today" : `${since(new Date(last.start))} ago`}</b><span>last workout</span></div>
       <div class="stat"><b class="num">${perWeek.toFixed(1)}</b><span>workouts per week, last 4 weeks</span></div>
-      <div class="stat"><b class="num">${state.sessions.length}</b><span>workouts logged</span></div>
     </div>
     <button class="card row split-row" data-action="toggle-splits">
       <div class="grow"><div class="eyebrow">Split</div><b>${esc(split.name)}</b>
@@ -81,11 +75,9 @@ export function today() {
       <div style="margin-top:8px">${rows || `<div class="empty">No exercises yet</div>`}</div>
       ${state.active ? "" : `<button class="btn primary block" style="margin-top:12px" data-action="start" data-id="${t.id}">Start workout</button>`}
     </section>
-    <div class="eyebrow section-title">${esc(split.name)}</div>
-    <div class="panels">${rotation().map(panel).join("")}</div>
-    <div class="eyebrow section-title">Your workouts</div>
+    <div class="eyebrow section-title">Or do another workout</div>
     <div class="panels">
-      ${own.map((x) => panel(x.id)).join("")}
+      ${[...rotation(), ...own.map((x) => x.id)].filter((id) => id !== t.id).map(panel).join("")}
       <button class="panel add" data-action="new-template">+ New template</button>
       ${state.active ? "" : `<button class="panel add" data-action="start-empty">Empty workout<span class="small muted">Add exercises as you go</span></button>`}
     </div>`;
@@ -137,8 +129,8 @@ export function templateView(id) {
   const rows = t.slots.map((slot, i) => `
     <div class="tpl-row">
       <div class="row">
+        <button class="grip" data-drag=".tpl-row" data-drag-action="tpl-move" data-id="${id}" aria-label="Drag to reorder">${icon.grip}</button>
         <button class="grow ellipsis tpl-name" data-action="tpl-swap" data-id="${id}" data-i="${i}">${esc(exercise(slot.ex)?.name ?? slot.ex)}</button>
-        <button class="icon-btn" data-action="tpl-move" data-id="${id}" data-i="${i}" aria-label="Move up" ${i ? "" : "disabled"}>↑</button>
         <button class="icon-btn" data-action="tpl-remove" data-id="${id}" data-i="${i}" aria-label="Remove">✕</button>
       </div>
       <div class="row tpl-opts">
@@ -206,9 +198,8 @@ actions["tpl-finisher"] = ({ id, i }) => {
   slot.finisher = FINISHERS[(FINISHERS.indexOf(slot.finisher ?? "") + 1) % FINISHERS.length];
   return saveProgram();
 };
-actions["tpl-move"] = ({ id, i }) => {
-  const slots = ownTemplate(id).slots;
-  [slots[+i - 1], slots[+i]] = [slots[+i], slots[+i - 1]];
+actions["tpl-move"] = ({ id, from, to }) => {
+  moveItem(ownTemplate(id).slots, +from, +to);
   return saveProgram();
 };
 actions["tpl-remove"] = ({ id, i }) => {

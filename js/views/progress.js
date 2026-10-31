@@ -8,7 +8,8 @@ import { PHASES } from "../program.js";
 import { openSheet, closeSheet } from "./sheet.js";
 import { MUSCLES, MINOR_MUSCLES } from "../library.js";
 import { lineChart, weightChart, barChart, sparkline, heatmap, compact, rangeStart, rangeChips } from "../charts.js";
-import { actions, esc, fmtDate, fmtKg, plural, toast, RECORD_LABEL } from "../ui.js";
+import { actions, esc, fmtDate, fmtKg, plural, toast, icon, RECORD_LABEL } from "../ui.js";
+import { moveItem } from "../reorder.js";
 import { localIso } from "../workout.js";
 
 const DAY_MS = 86400000;
@@ -198,8 +199,8 @@ export function trackedView() {
     <p class="small muted" style="margin:4px 4px 0">${own ? "Your choice of exercises for the dashboard." : "Chosen automatically: squat, bench press and deadlift, then the exercises you logged most in the last half year. Any change here makes it your own choice."}</p>
     <div class="list">${list.map((id, i) => `
       <div class="tpl-row"><div class="row">
+        <button class="grip" data-drag=".tpl-row" data-drag-action="tracked-move" aria-label="Drag to reorder">${icon.grip}</button>
         <span class="grow ellipsis tpl-name">${esc(exercise(id).name)}</span>
-        <button class="icon-btn" data-action="tracked-move" data-i="${i}" aria-label="Move up" ${i ? "" : "disabled"}>↑</button>
         <button class="icon-btn" data-action="tracked-remove" data-i="${i}" aria-label="Remove">✕</button>
       </div></div>`).join("") || `<div class="empty">No exercises</div>`}</div>
     <button class="btn block primary" data-action="tracked-add">+ Add exercise</button>
@@ -214,7 +215,7 @@ function changeTracked(change) {
   state.program.tracked = list;
   return saveProgram();
 }
-actions["tracked-move"] = ({ i }) => changeTracked((list) => { [list[+i - 1], list[+i]] = [list[+i], list[+i - 1]]; });
+actions["tracked-move"] = ({ from, to }) => changeTracked((list) => moveItem(list, +from, +to));
 actions["tracked-remove"] = ({ i }) => changeTracked((list) => { list.splice(+i, 1); });
 actions["tracked-add"] = () => openSheet({
   title: "Add to the dashboard", first: [], exclude: chosenTracked(),

@@ -6,6 +6,8 @@ export const actions = {};
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 export const fmtKg = (kg) => (kg == null ? "–" : String(Math.round(kg * 100) / 100));
 export const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+/** 1 as "1st", 12 as "12th", 23 as "23rd". */
+export const ordinal = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
 
 export function ago(date, now = new Date()) {
   const days = Math.round((now - date) / 86400000);
@@ -52,6 +54,7 @@ export const icon = {
   check: svg("M20 6 9 17l-5-5"),
   swap: svg("m16 3 4 4-4 4M20 7H4M8 21l-4-4 4-4M4 17h16"),
   down: svg("m6 9 6 6 6-6"),
+  grip: svg("M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01").replace('stroke-width="2"', 'stroke-width="3.5"'),
   more: svg("M5 12h.01M12 12h.01M19 12h.01").replace('stroke-width="2"', 'stroke-width="3"'),
   link: svg("M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"),
 };

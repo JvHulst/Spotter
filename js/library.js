@@ -9,14 +9,17 @@ async function readCsv(name) {
   return lines.map((line) => Object.fromEntries(line.split(",").map((v, i) => [keys[i], v])));
 }
 
-/** Exercises and patterns by id, and the built-in splits. Patterns in one `group` can stand in
+/** Exercises and patterns by id, the built-in splits and the execution cues by exercise id
+ *  (`{steps, images}`, built by tools/build_cues.py). Patterns in one `group` can stand in
  *  for each other in a slot. `secondary` lists the muscles a pattern trains indirectly, as
  *  muscle:share, where the share is the fraction of a set that counts for that muscle (0.5 when
  *  left out). */
 export async function loadLibrary() {
-  const [exercises, patterns, splits] = await Promise.all([
-    readCsv("exercises.csv"), readCsv("patterns.csv"), fetch(dataUrl("splits.json")).then((r) => r.json())]);
+  const [exercises, patterns, splits, cues] = await Promise.all([
+    readCsv("exercises.csv"), readCsv("patterns.csv"), fetch(dataUrl("splits.json")).then((r) => r.json()),
+    fetch(dataUrl("cues.json")).then((r) => r.json())]);
   return {
+    cues: new Map(Object.entries(cues)),
     exercises: new Map(exercises.map((e) => [e.id, { ...e, increment: Number(e.increment) }])),
     patterns: new Map(patterns.map((p) => [p.pattern, {
       ...p, group: p.group || p.pattern,

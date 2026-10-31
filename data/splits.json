@@ -6,7 +6,7 @@
     "about": "Every session trains every major muscle, so a short week still covers everything.",
     "days": [
       {"id": "full-body-a", "name": "Full Body A", "slots": [
-        {"pattern": "squat", "name": "Squat", "prefer": ["squat-barbell"], "sets": 4},
+        {"pattern": "squat", "name": "Squat", "prefer": ["squat-barbell"], "sets": 3},
         {"pattern": "horizontal-press", "name": "Bench press", "prefer": ["bench-press-barbell"], "sets": 4},
         {"pattern": "row", "sets": 4},
         {"pattern": "leg-curl", "prefer": ["seated-leg-curl-machine"], "sets": 3, "superset": true},
@@ -29,7 +29,7 @@
     "days": [
       {"id": "push-a", "name": "Push A", "slots": [
         {"pattern": "horizontal-press", "name": "Bench press", "prefer": ["bench-press-barbell"], "sets": 4},
-        {"pattern": "squat", "name": "Squat", "prefer": ["squat-barbell"], "sets": 4},
+        {"pattern": "squat", "name": "Squat", "prefer": ["squat-barbell"], "sets": 3},
         {"pattern": "incline-press", "sets": 3},
         {"pattern": "lateral-raise", "sets": 3, "superset": true},
         {"pattern": "triceps-extension", "prefer": ["overhead-tricep-extension-dumbbell"], "finisher": "drop", "sets": 3}
@@ -43,13 +43,13 @@
       ]},
       {"id": "push-b", "name": "Push B", "slots": [
         {"pattern": "vertical-press", "sets": 4},
-        {"pattern": "leg-press", "sets": 4},
+        {"pattern": "leg-press", "sets": 3},
         {"pattern": "horizontal-press", "prefer": ["bench-press-dumbbell"], "sets": 3},
         {"pattern": "chest-fly", "finisher": "myo", "sets": 3, "superset": true},
         {"pattern": "lateral-raise", "sets": 3}
       ]},
       {"id": "pull-b", "name": "Pull B", "slots": [
-        {"pattern": "hinge", "prefer": ["romanian-deadlift-barbell"], "sets": 4},
+        {"pattern": "hinge", "prefer": ["romanian-deadlift-barbell"], "sets": 3},
         {"pattern": "row", "sets": 4},
         {"pattern": "vertical-pull", "sets": 3},
         {"pattern": "rear-delt", "finisher": "myo", "sets": 3, "superset": true},
@@ -71,7 +71,7 @@
         {"pattern": "triceps-extension", "prefer": ["overhead-tricep-extension-dumbbell"], "finisher": "drop", "sets": 3}
       ]},
       {"id": "lower-a", "name": "Lower A", "slots": [
-        {"pattern": "squat", "name": "Squat", "prefer": ["squat-barbell"], "sets": 4},
+        {"pattern": "squat", "name": "Squat", "prefer": ["squat-barbell"], "sets": 3},
         {"pattern": "hinge", "prefer": ["romanian-deadlift-barbell"], "sets": 3},
         {"pattern": "leg-extension", "finisher": "myo", "sets": 3},
         {"pattern": "leg-curl", "prefer": ["seated-leg-curl-machine"], "sets": 3}
@@ -85,7 +85,7 @@
       ]},
       {"id": "lower-b", "name": "Lower B", "slots": [
         {"pattern": "hinge", "name": "Deadlift", "prefer": ["deadlift-barbell"], "sets": 3},
-        {"pattern": "leg-press", "sets": 4},
+        {"pattern": "leg-press", "sets": 3},
         {"pattern": "leg-curl", "prefer": ["seated-leg-curl-machine"], "finisher": "drop", "sets": 3},
         {"pattern": "leg-extension", "sets": 3}
       ]}
@@ -112,7 +112,7 @@
         {"pattern": "curl", "finisher": "drop", "sets": 3}
       ]},
       {"id": "ppl-legs", "name": "Legs", "slots": [
-        {"pattern": "squat", "name": "Squat", "prefer": ["squat-barbell"], "sets": 4},
+        {"pattern": "squat", "name": "Squat", "prefer": ["squat-barbell"], "sets": 3},
         {"pattern": "hinge", "prefer": ["romanian-deadlift-barbell"], "sets": 3},
         {"pattern": "leg-press", "sets": 3},
         {"pattern": "leg-curl", "prefer": ["seated-leg-curl-machine"], "sets": 3},

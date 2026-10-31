@@ -81,6 +81,9 @@ export const setE1rm = (s, ex, bodyweight) => e1rm(effectiveLoad(s.kg ?? 0, ex, 
 export const bestSet = (sets, ex, bodyweight) =>
   sets.reduce((best, s) => (!best || setE1rm(s, ex, bodyweight) > setE1rm(best, ex, bodyweight) ? s : best), null);
 
+/** Per session of an exercise: its best estimated one-rep max and its volume (see sessionRecords). */
+export const sessionBest = (sets, ex, bodyweight) => ({ e1rm: Math.max(...sets.map((s) => setE1rm(s, ex, bodyweight))), volume: volumeOf(sets) });
+
 /** Per session of an exercise: its best estimated one-rep max, heaviest weight and volume. */
 export function exerciseSeries(entries, ex, bodyweight) {
   return entries.map(({ date, sessionId, sets }) => ({
@@ -127,7 +130,7 @@ export function sessionRecords(sessions, exerciseOf, bodyweight) {
       const ex = exerciseOf(e.ex);
       const sets = working(e.sets);
       if (!ex || !sets.length) continue;
-      const now = { e1rm: Math.max(...sets.map((x) => setE1rm(x, ex, bodyweight))), weight: Math.max(...sets.map((x) => x.kg)), volume: volumeOf(sets) };
+      const now = { ...sessionBest(sets, ex, bodyweight), weight: Math.max(...sets.map((x) => x.kg)) };
       const before = best.get(e.ex);
       if (before) {
         for (const kind of ["e1rm", "weight", "volume"]) {

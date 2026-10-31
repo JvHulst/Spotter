@@ -36,6 +36,24 @@
   color-scheme: dark;
 }
 
+/* Accent colors other than the default red, chosen in Settings. The script sets data-accent and
+   --accent (the ACCENTS of views/settings.js) on the root element; the text and chart shades
+   derive from --accent, darker on the light theme and lighter on the dark one. */
+:root[data-accent] {
+  --accent-text: color-mix(in srgb, var(--accent) 82%, black);
+  --chart: color-mix(in srgb, var(--accent) 92%, white);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-accent]:not([data-theme="light"]) {
+    --accent-text: color-mix(in srgb, var(--accent) 55%, white);
+    --chart: color-mix(in srgb, var(--accent) 80%, white);
+  }
+}
+:root[data-accent][data-theme="dark"] {
+  --accent-text: color-mix(in srgb, var(--accent) 55%, white);
+  --chart: color-mix(in srgb, var(--accent) 80%, white);
+}
+
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body {
@@ -65,6 +83,23 @@ header.top h1 { font-size: 22px; margin: 0; flex: 1; letter-spacing: -0.01em; }
 header.top .back { font-size: 17px; color: var(--accent-text); padding: 8px 8px 8px 0; text-decoration: none; white-space: nowrap; }
 main { padding: 4px 16px calc(var(--tabbar) + env(safe-area-inset-bottom) + 24px); }
 main.workout { padding-bottom: calc(env(safe-area-inset-bottom) + 120px); }
+.has-mini main { padding-bottom: calc(var(--tabbar) + env(safe-area-inset-bottom) + 96px); }
+
+.mini {
+  position: fixed; left: 8px; right: 8px; z-index: 11;
+  bottom: calc(var(--tabbar) + env(safe-area-inset-bottom) + 8px);
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px;
+  border-radius: 16px; background: var(--surface); border: 1px solid var(--accent);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); color: var(--text); text-decoration: none;
+}
+
+.grip { display: grid; place-items: center; width: 36px; height: 36px; margin-left: -8px; border-radius: 10px; color: var(--muted); flex: none; touch-action: none; cursor: grab; }
+.grip svg { width: 22px; height: 22px; }
+.reordering { user-select: none; -webkit-user-select: none; }
+.reordering .link-btn, .reordering .ex-card > :not(.ex-head), .reordering .ex-head > :not(:first-child) { display: none; }
+.reordering .ex-card { margin-bottom: 8px; }
+.reordering .tpl-opts { display: none; }
+.reordering .dragging { background: var(--surface-2); outline: 2px solid var(--accent); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); }
 
 nav.tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
@@ -86,6 +121,11 @@ nav.tabs svg { width: 24px; height: 24px; }
 /* Cards and lists */
 .card { background: var(--surface); border-radius: var(--radius); padding: 16px; margin: 12px 0; }
 .card h2 { font-size: 20px; margin: 2px 0 4px; letter-spacing: -0.01em; }
+.cue-photos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cue-photos img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 10px; background: var(--surface-2); }
+.cues summary { margin-top: 12px; font-weight: 650; color: var(--accent-text); cursor: pointer; }
+.cues ol { margin: 8px 0 0; padding-left: 20px; line-height: 1.45; }
+.cues li { margin-bottom: 6px; }
 .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .row { display: flex; align-items: center; gap: 12px; }
 .grow { flex: 1; min-width: 0; }
@@ -115,7 +155,9 @@ nav.tabs svg { width: 24px; height: 24px; }
   font-size: 14px; font-weight: 600; color: var(--text);
 }
 .chip.on { background: var(--text); color: var(--bg); }
-
+/* An accent choice is filled with its color (--swatch); the chosen one is white with a ring. */
+.chip.swatch { background: var(--swatch); color: #fff; box-shadow: 0 0 0 2px transparent; }
+.chip.swatch.on { background: #fff; color: var(--swatch); box-shadow: 0 0 0 2px var(--swatch); }
 .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 650; }
 .mode-up { color: var(--up); }
 .mode-down { color: var(--down); }
@@ -146,9 +188,16 @@ nav.tabs svg { width: 24px; height: 24px; }
 }
 .set.static { display: block; }
 .set-main {
-  display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 10px;
+  display: grid; grid-template-columns: 28px 1fr auto auto; align-items: center; gap: 10px;
   padding: 10px 16px; width: 100%; min-height: 48px; text-align: left;
 }
+.set .e1rm { min-width: 64px; text-align: right; font-size: 13px; color: var(--muted); }
+.best { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; color: var(--muted); }
+.pr-val { color: var(--accent-text); font-weight: 700; }
+.well-done { text-align: center; padding: 28px 0 8px; }
+.well-done h2 { font-size: 30px; letter-spacing: -0.02em; margin: 0 0 6px; }
+.well-done p { margin: 0; color: var(--muted); }
+a.btn { text-decoration: none; }
 .set > :not(.swipe-del) { transition: transform 0.2s; }
 .set.swiped > :not(.swipe-del) { transform: translateX(-96px); }
 .set .cell {
@@ -156,7 +205,8 @@ nav.tabs svg { width: 24px; height: 24px; }
   text-align: center; font-size: 17px; font-weight: 700; color: var(--text);
 }
 .set .cell:focus { outline: 2px solid var(--accent); }
-.set.done .cell { background: transparent; color: var(--muted); }
+.set .cell.fresh { color: var(--muted); }
+.set.done .cell { background: transparent; }
 .set .times { text-align: center; color: var(--muted); font-size: 14px; }
 .rir-btn { justify-self: center; font-size: 13px; font-weight: 700; color: var(--accent-text); padding: 8px 4px; }
 .swipe-del {
@@ -223,10 +273,11 @@ button.link.danger { color: var(--danger); }
 .timer.flash { animation: flash 0.6s 3; }
 @keyframes flash { 50% { background: var(--accent); } }
 
-/* Sheets */
+/* Sheets. While one is open the page behind it does not scroll, and neither chains from the sheet. */
+body:has(.sheet-bg, .dropdown-bg) { overflow: hidden; }
 .sheet-bg { position: fixed; inset: 0; z-index: 20; background: rgb(0 0 0 / 0.45); display: flex; align-items: flex-end; }
 .sheet {
-  width: 100%; max-width: 560px; margin: 0 auto; max-height: 85dvh; overflow-y: auto;
+  width: 100%; max-width: 560px; margin: 0 auto; max-height: 85dvh; overflow-y: auto; overscroll-behavior: contain;
   background: var(--bg); border-radius: 20px 20px 0 0; padding: 8px 16px calc(env(safe-area-inset-bottom) + 16px);
 }
 .sheet-bg.center { align-items: center; justify-content: center; padding: 16px; }
@@ -295,6 +346,7 @@ button.link.danger { color: var(--danger); }
 .hm-legend i { width: 12px; height: 12px; display: inline-block; }
 .dropdown-bg { position: fixed; inset: 0; z-index: 25; background: rgb(0 0 0 / 0.25); }
 .dropdown {
+  overscroll-behavior: contain;
   position: fixed; overflow-y: auto; padding: 8px 0; border-radius: 14px; background: var(--surface-2);
   box-shadow: 0 12px 32px rgb(0 0 0 / 0.35); border: 1px solid var(--line);
 }

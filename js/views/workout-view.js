@@ -1,21 +1,27 @@
 // The workout screen: one card per exercise with its sets, its alternatives and any proposed
 // change, and below the cards an exercise for the muscle furthest behind this week.
 //
-// A set row shows its type (W, a number, D or M; tapping it changes the type), its weight and reps
-// as fields to type in, its RIR (tapping it steps through 0 to 4+), and a check mark that logs or
-// undoes the set. Swiping a row to the left reveals Delete. Nothing in a card expands or
-// collapses while you train, so rows stay where they are. Tapping the exercise's name drops down
-// its alternatives; everything else about an exercise sits in its ⋯ menu.
+// A set row shows its type (W, a number, D or M; tapping it opens a picker of the types), its
+// weight and reps as fields to type in, its RIR (tapping it opens a picker of 0 to 4+), and a
+// check mark that logs or undoes the set. Swiping a row to the left reveals Delete. Nothing in a
+// card expands or collapses while you train, so rows stay where they are. Tapping the exercise's
+// name drops down its alternatives; everything else about an exercise sits in its ⋯ menu.
+//
+// A workout of a built-in day is adaptive and shows proposed changes and the gap card. A workout
+// of the user's own template shows neither (see adaptive in workout.js).
 
 import { state, exercise, bodyweight, setWeight, saveActive, saveProgram } from "../state.js";
-import { template, targetFor, alternativeSections, proposeChange, plainBodyweight, allowsFinisher, setTypes, FINISHER_LABEL } from "../program.js";
+import { template, targetFor, alternativeSections, proposeChange, plainBodyweight, setTypes, SET_TYPE_LABEL, bigThreeRecords } from "../program.js";
 import { muscleStats, muscleShares } from "../history.js";
 import { MUSCLES } from "../library.js";
 import { WEEKLY_SETS_GUIDE } from "./muscles.js";
-import { logSet, undoSet, setEdited, setType, setWarmups, addSet, removeSet, removeExercise, swapExercise, addExercise, toggleSuperset,
-  saveAsTemplate, updateTemplate, setFinisher, finishWorkout, discardWorkout, localIso } from "../workout.js";
-import { actions, ask, choose, dropdown, esc, fmtKg, ago, since, setsText, icon, toast, plural } from "../ui.js";
+import { logSet, undoSet, editSet, setEdited, setType, setWarmups, addSet, removeSet, removeExercise, swapExercise, addExercise, toggleSuperset,
+  moveExercise, saveAsTemplate, updateTemplate, finishWorkout, discardWorkout, localIso, adaptive } from "../workout.js";
+import { isUntouched } from "../carry.js";
+import { actions, ask, choose, dropdown, esc, fmtKg, ago, since, setsText, icon, toast } from "../ui.js";
 import { openSheet, closeSheet } from "./sheet.js";
+import { confetti } from "../confetti.js";
+import { exerciseOrigin } from "./library-view.js";
 
 const today = () => localIso(new Date()).slice(0, 10);
 
@@ -35,7 +41,7 @@ export function workoutView() {
       <span class="small muted">kg</span>
     </label>
     ${list.length ? cards : `<div class="empty">Add the exercises of this workout as you go.</div>`}
-    ${gapCard()}
+    ${adaptive() ? gapCard() : ""}
     <button class="btn block ${list.length ? "" : "primary"}" style="margin-top:12px" data-action="add-exercise">+ Add exercise</button>
     <div class="row text-actions">
       ${!list.length ? "" : template(a.template)?.custom
@@ -46,9 +52,11 @@ export function workoutView() {
     </div>`;
   return {
     title: a.name, mainClass: "workout", body,
-    right: `<span class="small muted num" id="elapsed"></span><button class="btn small primary" data-action="finish">Finish</button>`,
+    right: `<span class="small muted num" id="elapsed"></span><a class="btn small" href="#today" aria-label="Minimize workout">Minimize</a><button class="btn small primary" data-action="finish">Finish</button>`,
   };
 }
+
+actions["move-ex"] = ({ from, to }) => moveExercise(+from, +to);
 
 const LABEL = { warmup: "W", drop: "D", myo: "M" };
 const typeOf = (set) => (set.warmup ? "warmup" : set.type ?? "");
@@ -63,7 +71,7 @@ function card(entry, e) {
   const rows = entry.sets.map((set, s) => {
     const type = typeOf(set);
     const next = state.active.focus?.e === e && state.active.focus?.s === s;
-    const field = (name, value, label) => `<input class="cell num" inputmode="decimal" enterkeyhint="done" value="${value ?? ""}"
+    const field = (name, value, label) => `<input class="cell num ${isUntouched(set, name) ? "fresh" : ""}" inputmode="decimal" enterkeyhint="done" value="${value ?? ""}"
       placeholder="${name === "kg" ? "kg" : "reps"}" aria-label="${label}" data-change="set-field" data-e="${e}" data-s="${s}" data-field="${name}">`;
     return `
       <div class="set ${type ? `t-${type}` : ""} ${set.done ? "done" : ""} ${next ? "next" : ""}" data-swipe>
@@ -78,6 +86,7 @@ function card(entry, e) {
     <section class="ex-card ${entry.superset || state.active.exercises[e - 1]?.superset ? "superset" : ""}">
       <div class="ex-head">
         <div class="row" style="gap:8px">
+          <button class="grip" data-drag=".ex-card" data-drag-action="move-ex" aria-label="Drag to reorder">${icon.grip}</button>
           <div class="eyebrow grow">${esc(slot?.name ?? ex.muscle)} · ${work} sets · ${target.reps.join("–")} reps @ RIR ${target.rir.join("–")}</div>
           <button class="icon-btn" data-action="ex-menu" data-e="${e}" aria-label="Exercise options">${icon.more}</button>
         </div>
@@ -98,7 +107,7 @@ const bodyweightOnly = () => state.active.exercises.length > 0 && state.active.e
 /** A proposed change of exercise (see proposeChange) with Switch and Keep. A workout of plain
  *  bodyweight exercises counts as training at home. */
 function changeHint(entry, e, slot) {
-  const change = proposeChange(entry.ex, slot, inWorkout(), { bodyweightOnly: bodyweightOnly() });
+  const change = adaptive() && proposeChange(entry.ex, slot, inWorkout(), { bodyweightOnly: bodyweightOnly() });
   if (!change) return "";
   return `
     <div class="proposal">
@@ -149,7 +158,9 @@ function showValues(e) {
   state.active.exercises[e].sets.forEach((set, s) => {
     for (const [field, value] of [["kg", set.kg == null ? "" : fmtKg(set.kg)], ["reps", set.reps]]) {
       const el = input(e, s, field);
-      if (el && el !== document.activeElement) el.value = value;
+      if (!el) continue;
+      if (el !== document.activeElement) el.value = value;
+      el.classList.toggle("fresh", isUntouched(set, field));
     }
   });
 }
@@ -165,22 +176,28 @@ actions.tick = (d) => {
   }
   return logSet(+d.e, +d.s);
 };
-actions["set-type"] = (d) => {
-  const types = setTypes(state.active.exercises[+d.e].ex);
-  return setType(+d.e, +d.s, types[(types.indexOf(typeOf(setAt(d))) + 1) % types.length]);
+actions["set-type"] = async (d) => {
+  const entry = state.active.exercises[+d.e];
+  const current = typeOf(setAt(d)) || "work";
+  const options = setTypes(entry.ex).map((t) => ({ key: t || "work", label: SET_TYPE_LABEL[t || "work"], on: (t || "work") === current }));
+  const pick = await choose(`Set ${+d.s + 1} of ${exercise(entry.ex).name}`, options);
+  if (pick && pick !== current) return setType(+d.e, +d.s, pick === "work" ? "" : pick);
+  return "keep";
 };
 actions["set-field"] = async (d, el) => {
   const value = parseFloat(el.value.replace(",", "."));
-  const set = setAt(d);
-  if (d.field === "kg") Object.assign(set, { kg: Number.isFinite(value) ? Math.max(0, value) : null, edited: true });
-  else if (Number.isFinite(value)) set.reps = Math.max(0, Math.round(value));
-  await saved(d);
+  if (d.field === "kg") await editSet(+d.e, +d.s, "kg", Number.isFinite(value) ? Math.max(0, value) : null);
+  else if (Number.isFinite(value)) await editSet(+d.e, +d.s, "reps", Math.max(0, Math.round(value)));
   showValues(+d.e);
   return "keep";
 };
-actions["rir-step"] = (d) => {
+const RIR_LABEL = ["0 · to failure", "1 · one rep left", "2 · two reps left", "3 · three reps left", "4+ · four or more left"];
+
+actions["rir-step"] = async (d) => {
   const set = setAt(d);
-  set.rir = ((set.rir ?? -1) + 1) % 5;
+  const pick = await choose("Reps in reserve", RIR_LABEL.map((label, i) => ({ key: String(i), label, on: set.rir === i })));
+  if (pick == null) return "keep";
+  set.rir = +pick;
   return saved(d);
 };
 actions["remove-set"] = ({ e, s }) => removeSet(+e, +s);
@@ -204,7 +221,7 @@ async function swapTo(e, id) {
 actions.alts = async ({ e }, el) => {
   const entry = state.active.exercises[+e];
   const slot = template(state.active.template)?.slots.find((s) => s.id === entry.slot);
-  const change = proposeChange(entry.ex, slot, inWorkout(), { bodyweightOnly: bodyweightOnly() });
+  const change = adaptive() && proposeChange(entry.ex, slot, inWorkout(), { bodyweightOnly: bodyweightOnly() });
   const item = (id) => {
     const last = state.index.get(id)?.at(-1)?.date;
     return { key: id, label: exercise(id).name, sub: `${exercise(id).equipment}${last ? ` · last ${since(last)} ago` : " · new to you"}` };
@@ -220,20 +237,24 @@ actions.alts = async ({ e }, el) => {
   if (pick) return swapTo(+e, pick);
 };
 
-/** The ⋯ menu of an exercise: search for a swap, warm-up sets, finisher, note and remove. */
+/** The ⋯ menu of an exercise: its page, search for a swap, warm-up sets, note and remove. */
 actions["ex-menu"] = async ({ e }) => {
   const entry = state.active.exercises[+e];
   const options = [
+    { key: "details", label: "Exercise details" },
     { key: "swap", label: "Search all exercises" },
     { key: "warmup", label: entry.warmup === false ? "Warm-up sets: off" : "Warm-up sets: on", on: entry.warmup !== false },
-    ...(allowsFinisher(entry.ex) ? ["", "drop", "myo"].map((f) => ({ key: `fin-${f}`, label: FINISHER_LABEL[f], on: (entry.finisher ?? "") === f })) : []),
     { key: "note", label: entry.note ? "Edit note" : "Add note" },
     { key: "remove", label: "Remove exercise", danger: true },
   ];
   const pick = await choose(exercise(entry.ex).name, options);
+  if (pick === "details") {
+    exerciseOrigin.back = "#workout";
+    location.hash = `#exercise-${entry.ex}`;
+    return "keep";
+  }
   if (pick === "swap") return actions.swap({ e });
   if (pick === "warmup") return setWarmups(+e, entry.warmup === false);
-  if (pick?.startsWith("fin-")) return setFinisher(+e, pick.slice(4));
   if (pick === "note") {
     const note = await ask("Note for this exercise", { ok: "Save", text: entry.note });
     if (note == null) return;
@@ -277,9 +298,13 @@ actions["update-template"] = async () => {
 actions.finish = async () => {
   if (!(await ask("Finish and save this workout?", { ok: "Finish" }))) return;
   const session = await finishWorkout();
-  const prs = session ? state.records.get(session.id)?.length ?? 0 : 0;
-  toast(!session ? "Nothing logged, workout closed" : prs ? `Workout saved with ${plural(prs, "record")}` : "Workout saved");
-  location.hash = session ? `#session-${session.id}` : "#today";
+  if (!session) {
+    toast("Nothing logged, workout closed");
+    location.hash = "#today";
+    return;
+  }
+  location.hash = `#done-${session.id}`;
+  if (bigThreeRecords(state.records.get(session.id) ?? []).length) confetti();
 };
 actions.discard = async () => {
   if (!(await ask("Discard this workout? Logged sets are lost.", { ok: "Discard", danger: true }))) return;

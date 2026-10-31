@@ -2,8 +2,9 @@
 // session, which can also be edited.
 
 import { state, exercise, bodyweight, saveSessions, deleteSession } from "../state.js";
-import { working, volumeOf, bestSet, setCount } from "../history.js";
-import { actions, ask, esc, fmtDate, fmtKg, plural, toast, RECORD_LABEL } from "../ui.js";
+import { working, volumeOf, bestSet, setCount, setE1rm, sessionBest } from "../history.js";
+import { actions, ask, choose, esc, fmtDate, fmtKg, plural, ordinal, toast, RECORD_LABEL } from "../ui.js";
+import { setTypes, SET_TYPE_LABEL } from "../program.js";
 import { openSheet, closeSheet } from "./sheet.js";
 
 const PAGE = 30;
@@ -54,6 +55,32 @@ export function historyView() {
   return { title: "History", tab: "log", body: parts.join("") + more };
 }
 
+/** The screen after finishing a workout: its number, its stats and its records. */
+export function summaryView(id) {
+  const s = state.sessions.find((x) => x.id === id);
+  if (!s) return sessionView(id);
+  const work = s.exercises.flatMap((e) => working(e.sets));
+  const prs = state.records.get(id) ?? [];
+  const unit = (r) => `${Math.round(r.value).toLocaleString()} kg`;
+  const lines = prs.map((r) => `<div class="plan-row"><span>${esc(exercise(r.ex)?.name ?? r.ex)}</span><b class="num pr-val">${RECORD_LABEL[r.kind]} ${unit(r)}</b></div>`).join("");
+  return {
+    title: "Workout done",
+    body: `
+      <div class="well-done">
+        <h2>Well done!</h2>
+        <p>You completed your ${ordinal(state.sessions.findIndex((x) => x.id === id) + 1)} workout.</p>
+      </div>
+      <div class="stats">
+        <div class="stat"><b class="num">${s.durationMin ?? "–"}</b><span>minutes</span></div>
+        <div class="stat"><b class="num">${setCount(work)}</b><span>working sets</span></div>
+        <div class="stat"><b class="num">${Math.round(volumeOf(work)).toLocaleString()}</b><span>kg volume</span></div>
+      </div>
+      ${prs.length ? `<section class="card"><div class="eyebrow">${plural(prs.length, "personal record")}</div>${lines}</section>` : ""}
+      <a class="btn block primary" href="#today">Done</a>
+      <a class="btn block" style="margin-top:8px" href="#session-${encodeURIComponent(id)}">View workout</a>`,
+  };
+}
+
 export function sessionView(id) {
   const s = state.sessions.find((x) => x.id === id);
   if (!s) return { title: "Workout", back: "#history", body: `<div class="empty">Workout not found</div>` };
@@ -89,15 +116,20 @@ function viewCard(e, prs) {
   const ex = exercise(e.ex);
   let n = 0;
   const mine = prs.filter((r) => r.ex === e.ex);
+  const isPr = (kind) => mine.some((r) => r.kind === kind);
+  const best = ex && working(e.sets).length ? sessionBest(working(e.sets), ex, bodyweight()) : null;
   const rows = e.sets.map((x) => `
     <div class="set static ${x.warmup ? "warm" : ""} ${x.type ? "fin" : ""}"><div class="set-main">
       <span class="idx">${setLabel(x) ?? ++n}</span>
       <span class="val num">${fmtKg(x.kg)} kg × ${x.reps}</span>
       <span class="rir">${x.rir != null ? `RIR ${x.rir}` : ""}</span>
+      <span class="e1rm num">${ex && !x.warmup && !x.type ? `1RM ${Math.round(setE1rm(x, ex, bodyweight()))}` : ""}</span>
     </div></div>`).join("");
+  const stat = (label, value, kind) => `<span class="${isPr(kind) ? "pr-val" : ""}">${label} <b class="num">${value}</b>${isPr(kind) ? " PR" : ""}</span>`;
   return `<section class="ex-card"><div class="ex-head">
       <a class="name" style="color:inherit;text-decoration:none" href="#exercise-${e.ex}">${esc(ex?.name ?? e.ex)}</a>
-      ${mine.length ? `<div class="pr-tags">${mine.map((r) => `<span class="pr-badge">${RECORD_LABEL[r.kind]} PR</span>`).join("")}</div>` : ""}
+      ${best ? `<div class="best small">${stat("Best 1RM", `${Math.round(best.e1rm)} kg`, "e1rm")}${stat("Volume", `${Math.round(best.volume).toLocaleString()} kg`, "volume")}</div>` : ""}
+      ${isPr("weight") ? `<div class="pr-tags"><span class="pr-badge">${RECORD_LABEL.weight} PR</span></div>` : ""}
       ${e.note ? `<div class="small muted">${esc(e.note)}</div>` : ""}</div>${rows}</section>`;
 }
 
@@ -140,15 +172,20 @@ actions["s-set"] = ({ e, s: i, f }, el) => edit((s) => {
     else delete set.rir;
   } else if (Number.isFinite(v)) set[f] = f === "reps" ? Math.round(v) : v;
 });
-// The set number cycles through working set, warm-up, drop set and myo-reps mini-set.
-actions["s-type"] = ({ e, s: i }) => edit((s) => {
-  const set = s.exercises[+e].sets[+i];
-  const next = set.warmup ? "drop" : set.type === "drop" ? "myo" : set.type === "myo" ? "" : "warmup";
-  delete set.warmup;
-  delete set.type;
-  if (next === "warmup") set.warmup = true;
-  else if (next) set.type = next;
-});
+// A tap on the set number opens a picker of the set types.
+actions["s-type"] = async ({ e, s: i }) => {
+  const entry = state.sessions.find((x) => x.id === state.ui.editing).exercises[+e];
+  const current = entry.sets[+i].warmup ? "warmup" : entry.sets[+i].type ?? "work";
+  const pick = await choose("Set type", setTypes(entry.ex).map((t) => ({ key: t || "work", label: SET_TYPE_LABEL[t || "work"], on: (t || "work") === current })));
+  if (!pick || pick === current) return "keep";
+  return edit((s) => {
+    const target = s.exercises[+e].sets[+i];
+    delete target.warmup;
+    delete target.type;
+    if (pick === "warmup") target.warmup = true;
+    else if (pick !== "work") target.type = pick;
+  });
+};
 actions["s-del-set"] = ({ e, s: i }) => edit((s) => { s.exercises[+e].sets.splice(+i, 1); });
 actions["s-add-set"] = ({ e }) => edit((s) => {
   const sets = s.exercises[+e].sets;

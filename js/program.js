@@ -22,6 +22,10 @@ import { WEIGHTED } from "./strong.js";
 /** Squat, bench press and deadlift: the lifts trained for strength as well as size. */
 export const STRENGTH_LIFTS = new Set(["squat-barbell", "bench-press-barbell", "deadlift-barbell"]);
 
+/** The records of a session (see sessionRecords) that are a new estimated one-rep max of squat,
+ *  bench press or deadlift. */
+export const bigThreeRecords = (records) => records.filter((r) => r.kind === "e1rm" && STRENGTH_LIFTS.has(r.ex));
+
 /**
  * The category of an exercise, which sets its rep range and target RIR (settings.ranges): heavy
  * compounds with a barbell, other compounds (machines, cables, dumbbells, bodyweight), and
@@ -156,8 +160,13 @@ export function slotOptions({ pattern: p, prefer = [] }) {
   return [...prefer.filter((id) => exercise(id)), ...pool];
 }
 
-/** The exercise of each slot of a training day, with no exercise in two slots. */
+/**
+ * The exercise of each slot of a training day. A built-in day is adaptive: a slot gets the
+ * exercise last logged in it, with no exercise in two slots. A template of the user's own is
+ * fixed: each slot is the exercise saved in it.
+ */
 export function dayPlan(t) {
+  if (t.custom) return t.slots.map((slot) => ({ slot, id: slot.prefer[0] }));
   const taken = [];
   return t.slots.map((slot) => {
     const choice = slotChoice(slot);
@@ -251,17 +260,13 @@ export const FINISHERS = ["", "drop", "myo"];
 /** The set types that can follow each other when a set's label is tapped: working set, warm-up,
  *  drop set, and for isolation exercises a myo-reps mini-set. */
 export const setTypes = (id) => ["", "warmup", "drop", ...(allowsFinisher(id) ? ["myo"] : [])];
+/** Names of the set types, keyed "work" for a working set (the key "" of setTypes). */
+export const SET_TYPE_LABEL = { work: "Working set", warmup: "Warm-up", drop: "Drop set", myo: "Myo-reps" };
 
-/** Store a choice for a slot of a workout: in the user's template, or as an override of a
- *  built-in slot. */
+/** Store a choice made in a workout as an override of a built-in slot. The user's own templates
+ *  change only through Save as template and Update template, so they are left alone. */
 export function setSlotOption(templateId, slotId, key, value) {
-  const own = ownTemplate(templateId);
-  if (own) {
-    const slot = own.slots.find((x) => x.id === slotId);
-    if (slot) slot[key] = value;
-  } else if (slotId) {
-    state.program.slots[slotId] = { ...state.program.slots[slotId], [key]: value };
-  }
+  if (slotId && !ownTemplate(templateId)) state.program.slots[slotId] = { ...state.program.slots[slotId], [key]: value };
 }
 export const FINISHER_LABEL = { "": "No finisher", drop: "Drop set", myo: "Myo-reps" };
 

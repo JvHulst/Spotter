@@ -173,14 +173,16 @@ async function apply(name, doc) {
     addCustomExercises(doc.program.extra);
     await Promise.all([kv.set("program", doc.program), kv.set("settings", doc.settings), kv.set("deleted", doc.deleted), storeWeights(doc.weights)]);
     const gone = state.sessions.filter((s) => doc.deleted[s.id]);
-    await Promise.all(gone.map((s) => sessionStore.delete(s.id)));
     state.sessions = state.sessions.filter((s) => !doc.deleted[s.id]);
+    await Promise.all(gone.map((s) => sessionStore.delete(s.id)));
   } else {
+    // State is updated before the first await, so that a session saved meanwhile is never
+    // classed as gone from a snapshot that predates it.
     const year = name.slice(9, 13);
     const ids = new Set(doc.sessions.map((s) => s.id));
     const gone = state.sessions.filter((s) => yearOf(s) === year && !ids.has(s.id));
-    await Promise.all([sessionStore.putMany(doc.sessions), ...gone.map((s) => sessionStore.delete(s.id))]);
     state.sessions = [...state.sessions.filter((s) => yearOf(s) !== year && !ids.has(s.id)), ...doc.sessions].sort((a, b) => a.start.localeCompare(b.start));
+    await Promise.all([sessionStore.putMany(doc.sessions), ...gone.map((s) => sessionStore.delete(s.id))]);
   }
 }
 
@@ -196,6 +198,8 @@ async function run(cfg) {
     if (sha && sha !== known?.sha) {
       const text = await decrypt(cfg.key, await download(cfg, sha));
       remoteHash = await sha256(text);
+      // Local data may have changed (an import) while downloading, so merge into a fresh snapshot.
+      doc = localDoc(name);
       const merged = merge(name, doc, JSON.parse(text));
       if (stable(merged) !== stable(doc)) {
         await apply(name, merged);

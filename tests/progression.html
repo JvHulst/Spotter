@@ -8,6 +8,10 @@ import { indexByExercise, sessionRecords, stalled, records, muscleShares, weekly
 import { cleanProgram } from "../js/program.js";
 import { parseCsv, csvKind, weighIns, strongSessions, splitWeighted } from "../js/strong.js";
 import { encrypt, decrypt, deriveKey, stable } from "../js/sync.js";
+import { afterSet } from "../js/rest.js";
+import { carryDown, isUntouched } from "../js/carry.js";
+import { moveItem } from "../js/reorder.js";
+import { loadLibrary } from "../js/library.js";
 
 const results = [];
 const check = (name, actual, expected) => {
@@ -74,8 +78,8 @@ check("warm-ups: light barbell, only the empty bar", kgs(warmupSets(30, bar, "co
 check("warm-ups: 75 kg adds plates only (10s, 10s, then 5 and 2.5)", kgs(warmupSets(75, bar, "compound")), "20x10 40x8 60x3");
 check("warm-ups: 100 kg", kgs(warmupSets(100, bar, "compound")), "20x10 60x5 80x3");
 check("warm-ups: 140 kg", kgs(warmupSets(140, bar, "compound")), "20x10 60x8 100x5 120x3");
-check("warm-ups: barbell isolation, the bar only", kgs(warmupSets(40, bar, "isolation")), "20x10");
-check("warm-ups: isolation", warmupSets(20, db, "isolation"), [{ kg: 12, reps: 5 }]);
+check("warm-ups: none for a barbell isolation exercise", warmupSets(40, bar, "isolation"), []);
+check("warm-ups: none for an isolation exercise", warmupSets(20, db, "isolation"), []);
 check("warm-ups: none for bodyweight", warmupSets(10, weighted, "compound"), []);
 
 const rotation = ["a", "b"];
@@ -157,6 +161,80 @@ check("sync: encrypt and decrypt", await decrypt(key, await encrypt(key, doc)), 
 const wrong = await deriveKey("wrong horse battery", new Uint8Array(16));
 check("sync: a wrong passphrase fails", await decrypt(wrong, await encrypt(key, doc)).then(() => "read", () => "rejected"), "rejected");
 
-const failed = results.filter((r) => r.startsWith("FAIL")).length;
+// rest: the set to log next and the rest before it. Sets are written as letters: w warm-up,
+// s working set, d drop set; a capital letter is a set already logged.
+const sets = (spec) => [...spec].map((c) => ({ ...(c.toLowerCase() === "w" ? { warmup: true } : {}), ...(c.toLowerCase() === "d" ? { type: "drop" } : {}), done: c === c.toUpperCase() }));
+const entries = (...specs) => specs.map(([spec, superset = false], i) => ({ ex: "ab"[i] ?? "c", superset, sets: sets(spec) }));
+const rests = { warmup: 60, superset: 45, of: (id) => ({ a: 90, b: 120, c: 120 })[id] };
+const after = (list, e, s) => afterSet(list, e, s, rests);
+check("rest: next working set takes the exercise's rest", after(entries(["Sss"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 90 });
+check("rest: after the last warm-up, the working-set rest", after(entries(["WWs"]), 0, 1), { focus: { e: 0, s: 2 }, rest: 90 });
+check("rest: between warm-ups, the warm-up rest", after(entries(["Ww"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 60 });
+check("rest: after the last working set, the next exercise's warm-up rest", after(entries(["S"], ["ws"]), 0, 0), { focus: { e: 1, s: 0 }, rest: 60 });
+check("rest: after the last working set, the next exercise's working set takes this exercise's rest", after(entries(["S"], ["s"]), 0, 0), { focus: { e: 1, s: 0 }, rest: 90 });
+check("rest: nothing left", after(entries(["S"]), 0, 0), null);
+check("rest: a drop set follows at once", after(entries(["Sd"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 10 });
+check("superset: the first exercise hands over after the short rest", after(entries(["Ss", true], ["ss"]), 0, 0), { focus: { e: 1, s: 0 }, rest: 45 });
+check("superset: the second exercise hands back after the longer rest", after(entries(["Ss", true], ["Ss"]), 1, 0), { focus: { e: 0, s: 1 }, rest: 120 });
+check("superset: a drop set stays with its exercise", after(entries(["Sds", true], ["ss"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 10 });
+check("superset: after the drop set the other exercise follows", after(entries(["SDs", true], ["ss"]), 0, 1), { focus: { e: 1, s: 0 }, rest: 45 });
+check("superset: the other exercise's warm-ups come first, with the warm-up rest", after(entries(["Ss", true], ["wws"]), 0, 0), { focus: { e: 1, s: 0 }, rest: 60 });
+check("superset: a warm-up does not hand over", after(entries(["Ws", true], ["ws"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 90 });
+check("superset: an exhausted partner leaves the exercise to continue", after(entries(["Ss", true], ["S"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 90 });
+
+// carry: a typed value runs down the untouched working sets
+const four = () => Array.from({ length: 4 }, () => ({ kg: 80, planKg: 80, reps: 8, planReps: 8 }));
+const weights = (sets) => sets.map((x) => x.kg);
+{
+  const sets = four();
+  carryDown(sets, 0, "kg", 75);
+  check("carry: a typed weight reaches the later untouched sets", weights(sets), [75, 75, 75, 75]);
+  check("carry: the plan follows, the later sets stay untouched", [sets[1].planKg, isUntouched(sets[1], "kg"), isUntouched(sets[0], "kg")], [75, true, false]);
+}
+{
+  const sets = four();
+  carryDown(sets, 1, "kg", 70);
+  carryDown(sets, 0, "kg", 85);
+  check("carry: a typed set keeps its value", weights(sets), [85, 70, 85, 85]);
+}
+{
+  const sets = four();
+  sets[1].done = true;
+  carryDown(sets, 0, "kg", 90);
+  check("carry: a logged set keeps its value", weights(sets), [90, 80, 90, 90]);
+}
+{
+  const sets = four();
+  sets[2].type = "drop";
+  sets.unshift({ kg: 40, planKg: 40, reps: 8, planReps: 8, warmup: true });
+  carryDown(sets, 0, "kg", 30);
+  check("carry: a warm-up edit does not carry", weights(sets), [30, 80, 80, 80, 80]);
+  carryDown(sets, 1, "kg", 70);
+  check("carry: a typed value skips drop sets", weights(sets), [30, 70, 70, 80, 70]);
+}
+{
+  const sets = four();
+  carryDown(sets, 0, "reps", 6);
+  check("carry: reps carry the same way", sets.map((x) => x.reps), [6, 6, 6, 6]);
+  carryDown(sets, 0, "kg", null);
+  check("carry: an emptied field carries nothing", [sets[0].kg, sets[1].kg], [null, 80]);
+}
+
+const moved = (list, from, to) => (moveItem(list, from, to), list);
+check("moveItem: forward", moved([1, 2, 3, 4], 0, 2), [2, 3, 1, 4]);
+check("moveItem: backward", moved([1, 2, 3, 4], 3, 1), [1, 4, 2, 3]);
+check("moveItem: same place", moved([1, 2, 3], 1, 1), [1, 2, 3]);
+
+{
+  const library = await loadLibrary();
+  const missing = [...library.exercises.keys()].filter((id) => !library.cues.get(id)?.steps.length);
+  check("cues: every exercise has steps", missing, []);
+  const images = [...new Set([...library.cues.values()].flatMap((c) => c.images))];
+  const broken = [];
+  for (const p of images) if (!(await fetch(`../img/ex/${encodeURI(p)}`)).ok) broken.push(p);
+  check("cues: every image file exists", broken, []);
+}
+
+const failed = results.filter((r) => r.startsWith("FAIL")).length;((r) => r.startsWith("FAIL")).length;
 document.getElementById("out").textContent = `${failed ? "FAILED" : "ALL PASSED"} ${results.length - failed}/${results.length}\n` + results.join("\n");
 </script>

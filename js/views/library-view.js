@@ -11,6 +11,9 @@ import { actions, esc, ago, fmtDate, fmtKg, fmtClock, setsText } from "../ui.js"
 
 const METRICS = { e1rm: "Est. 1RM", top: "Heaviest", volume: "Volume" };
 
+/** Where the Back link of an exercise page leads when the page was opened from the workout. */
+export const exerciseOrigin = { back: null };
+
 export function libraryView() {
   const muscles = ["all", ...MUSCLES, ...MINOR_MUSCLES];
   const chips = muscles.map((m) => `<button class="chip ${(state.ui.muscle ?? "all") === m ? "on" : ""}" data-action="lib-muscle" data-m="${m}" style="text-transform:capitalize">${m}</button>`).join("");
@@ -45,10 +48,25 @@ export function exerciseView(id) {
   const e = exercise(id);
   if (!e) return { title: "Exercise", back: "#library", body: `<div class="empty">Unknown exercise</div>` };
   const entries = state.index.get(id) ?? [];
-  const head = `<div class="small muted" style="text-transform:capitalize">${esc(e.muscle)} · ${esc(pattern(id).label)} · ${esc(e.equipment)}</div>`;
+  const head = `<div class="small muted" style="text-transform:capitalize">${esc(e.muscle)} · ${esc(pattern(id).label)} · ${esc(e.equipment)}</div>${cuesCard(id)}`;
   const body = entries.length ? head + recordsCard(entries, e) + chartCard(entries, e) + repTable(entries, e) + targetsCard(id, e) + recentList(entries)
     : head + `<div class="empty">No sessions with this exercise yet</div>` + targetsCard(id, e);
-  return { title: e.name, back: "#library", body };
+  return { title: e.name, back: exerciseOrigin.back ?? "#library", body };
+}
+
+/** The exercise's two reference photos (start and end position) and its execution steps. The
+ *  steps are collapsed so the records stay in view. */
+function cuesCard(id) {
+  const cue = state.library.cues.get(id);
+  if (!cue) return "";
+  const photos = cue.images.map((p) => `<img src="img/ex/${encodeURI(p)}" alt="" loading="lazy">`).join("");
+  return `
+    <section class="card cues">
+      <div class="cue-photos">${photos}</div>
+      <details><summary>How to perform</summary>
+        <ol>${cue.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
+      </details>
+    </section>`;
 }
 
 /** Stat tiles of the exercise's records, each with the date it was set. */

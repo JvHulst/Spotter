@@ -5,11 +5,14 @@ import { loadLibrary } from "./library.js";
 import { indexByExercise, lastBySlot, usageCounts, sessionRecords } from "./history.js";
 import { builtinDays, defaultProgram, migrateProgram } from "./program.js";
 import { splitWeighted } from "./strong.js";
+import { DEFAULT_SOUND } from "./sounds.js";
 
 /** Rest in seconds. Rest beyond about 90 s shows no detectable extra hypertrophy (Singer et al.
- *  2024, Front. Sports Act. Living 6:1429789); heavy compound lifts get a little more. */
+ *  2024, Front. Sports Act. Living 6:1429789); heavy compound lifts get a little more.
+ *  `accent` is a key of ACCENTS in views/settings.js and `sound` a key of SOUNDS in sounds.js
+ *  or "off". */
 export const DEFAULT_SETTINGS = {
-  restCompound: 120, restIsolation: 90, restSuperset: 45, restWarmup: 60, theme: "dark", bodyweight: 80,
+  restCompound: 120, restIsolation: 90, restSuperset: 45, restWarmup: 60, theme: "dark", accent: "red", sound: DEFAULT_SOUND, bodyweight: 80,
   ranges: {
     heavy: { reps: [5, 8], rir: [1, 2] },
     compound: { reps: [8, 12], rir: [0, 1] },
@@ -102,9 +105,9 @@ export const saveActive = () => (state.active ? kv.set("active", state.active) :
 
 /** Store sessions (new or replacing those with the same id) and keep the list sorted. */
 export async function saveSessions(list) {
-  await sessionStore.putMany(list);
   const ids = new Set(list.map((s) => s.id));
   state.sessions = [...state.sessions.filter((s) => !ids.has(s.id)), ...list].sort((a, b) => a.start.localeCompare(b.start));
+  await sessionStore.putMany(list);
   reindex();
   hooks.changed();
 }

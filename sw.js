@@ -1,14 +1,14 @@
 // Service worker: keeps the app usable offline. Files are served from the cache and refreshed
 // from the network in the background, so a new version is picked up on the next launch.
 
-const CACHE = "spotter-v10";
+const CACHE = "spotter-v15";
 const SHELL = [
   "./", "index.html", "manifest.webmanifest", "css/app.css",
-  "js/app.js", "js/charts.js", "js/db.js", "js/history.js", "js/library.js", "js/program.js", "js/progression.js",
-  "js/state.js", "js/strong.js", "js/sync.js", "js/ui.js", "js/workout.js",
+  "js/app.js", "js/carry.js", "js/charts.js", "js/db.js", "js/history.js", "js/library.js", "js/program.js", "js/progression.js",
+  "js/reorder.js", "js/rest.js", "js/confetti.js", "js/sounds.js", "js/state.js", "js/strong.js", "js/sync.js", "js/ui.js", "js/workout.js",
   "js/views/library-view.js", "js/views/log.js", "js/views/muscles.js", "js/views/progress.js", "js/views/settings.js",
   "js/views/sheet.js", "js/views/today.js", "js/views/workout-view.js",
-  "data/exercises.csv", "data/patterns.csv", "data/splits.json", "icons/icon.svg", "icons/icon-180.png", "icons/icon-192.png",
+  "data/cues.json", "data/exercises.csv", "data/patterns.csv", "data/splits.json", "sounds/fahhh.mp3", "icons/icon.svg", "icons/icon-180.png", "icons/icon-192.png",
 ];
 
 self.addEventListener("install", (event) => {

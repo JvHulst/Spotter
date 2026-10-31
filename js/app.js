@@ -5,13 +5,15 @@ import { persist } from "./db.js";
 import { actions, esc, icon, fmtClock, markPoint } from "./ui.js";
 import { today, templateView, settingsLink } from "./views/today.js";
 import { workoutView } from "./views/workout-view.js";
-import { historyView, sessionView } from "./views/log.js";
-import { libraryView, exerciseView } from "./views/library-view.js";
+import { historyView, sessionView, summaryView } from "./views/log.js";
+import { libraryView, exerciseView, exerciseOrigin } from "./views/library-view.js";
 import { musclesView } from "./views/muscles.js";
 import { progressView, bodyView, trackedView } from "./views/progress.js";
-import { settingsView, applyTheme } from "./views/settings.js";
+import { settingsView, applyAppearance } from "./views/settings.js";
 import { startSync } from "./sync.js";
 import { sheetHtml } from "./views/sheet.js";
+import { playSound, unlockAudio } from "./sounds.js";
+import { beginReorder } from "./reorder.js";
 
 const root = document.getElementById("app");
 const TABS = [["today", "#today", "Today"], ["log", "#history", "History"], ["progress", "#progress", "Progress"],
@@ -20,10 +22,12 @@ const TABS = [["today", "#today", "Today"], ["log", "#history", "History"], ["pr
 // Routes are plain names such as #history, or a name and an id such as #session-<id>.
 function route() {
   const [, page, id] = location.hash.match(/^#([a-z]+)(?:-(.+))?$/) ?? [];
+  if (page !== "exercise") exerciseOrigin.back = null;
   switch (page) {
     case "workout": return workoutView();
     case "history": return historyView();
     case "session": return sessionView(decodeURIComponent(id));
+    case "done": return summaryView(decodeURIComponent(id));
     case "library": return libraryView();
     case "exercise": return exerciseView(id);
     case "muscles": return musclesView();
@@ -39,20 +43,33 @@ function route() {
 export function render() {
   const view = route();
   const workout = location.hash === "#workout";
+  const minimized = Boolean(state.active) && !workout;
   const nav = workout ? "" : `<nav class="tabs">${TABS.map(([tab, href, label]) =>
     `<a href="${href}" class="${view.tab === tab ? "on" : ""}">${icon[tab]}${label}</a>`).join("")}</nav>`;
   document.querySelector(".tip")?.remove();
+  root.classList.toggle("has-mini", minimized);
   root.innerHTML = `
     <header class="top">
       ${view.back ? `<a class="back" href="${view.back}">‹ Back</a>` : ""}
       <h1 class="ellipsis">${esc(view.title)}</h1>${view.right ?? (view.tab ? settingsLink() : "")}
     </header>
     <main class="${view.mainClass ?? ""}">${view.body}</main>
+    ${minimized ? miniBar() : ""}
     ${nav}
     ${workout ? timerHtml() : ""}
     ${sheetHtml()}`;
   tick();
 }
+
+/** The bar above the tabs that stands in for a workout in progress while the user browses. */
+const miniBar = () => `
+  <a class="mini" href="#workout">
+    <div class="grow">
+      <b class="ellipsis">${esc(state.active.name)}</b>
+      <div class="small muted num"><span id="mini-elapsed"></span><span id="mini-rest"></span></div>
+    </div>
+    <span class="btn small primary">Resume</span>
+  </a>`;
 
 // --- Events -----------------------------------------------------------------------------
 
@@ -62,6 +79,18 @@ async function dispatch(name, el, event) {
   const result = await handler({ ...el.dataset }, el, event);
   if (result !== "keep") render();
 }
+
+// A grip (data-drag) starts a drag; its data-drag-action receives the old and new position and
+// runs only when the item moved.
+document.addEventListener("pointerdown", (event) => {
+  const grip = event.target.closest("[data-drag]");
+  if (!grip || (event.pointerType === "mouse" && event.button !== 0)) return;
+  beginReorder(event, grip, (from, to) => {
+    if (from === to) return;
+    Object.assign(grip.dataset, { from, to });
+    return dispatch(grip.dataset.dragAction, grip, event);
+  });
+});
 
 document.addEventListener("click", (event) => {
   unlockAudio();
@@ -91,9 +120,20 @@ document.addEventListener("input", (event) => {
   const el = event.target.closest("[data-input]");
   if (el) dispatch(el.dataset.input, el, event);
 });
-// Data from another device arrived; redraw unless the user is typing or in a workout.
+// Tapping a number field selects its whole value, so typing replaces it. The delay lets iOS
+// finish placing the cursor first.
+document.addEventListener("focusin", (event) => {
+  const el = event.target;
+  if (el.matches?.('input[inputmode="decimal"]')) setTimeout(() => el.setSelectionRange(0, el.value.length), 0);
+});
+// While a dialog, sheet or dropdown is open, its backdrop does not scroll the page behind it.
+document.addEventListener("touchmove", (event) => {
+  if (event.target.matches?.(".sheet-bg, .dropdown-bg")) event.preventDefault();
+}, { passive: false });
+// Data from another device arrived; redraw unless the user is typing, dragging or in a workout.
 window.addEventListener("spotter-synced", () => {
-  if (location.hash !== "#workout" && !document.activeElement?.matches("input, textarea")) render();
+  applyAppearance();
+  if (location.hash !== "#workout" && !document.activeElement?.matches("input, textarea") && !document.querySelector(".reordering")) render();
 });
 window.addEventListener("hashchange", () => {
   window.scrollTo(0, 0);
@@ -156,22 +196,29 @@ function timerHtml() {
 let alerted = null;
 function tick() {
   const a = state.active;
-  const elapsed = document.getElementById("elapsed");
-  if (a && elapsed) elapsed.textContent = fmtClock((Date.now() - new Date(a.start)) / 1000);
-  const rest = a?.rest;
-  const clock = document.getElementById("timer-clock");
-  if (!rest || !clock) return;
+  if (!a) return;
+  const clock = fmtClock((Date.now() - new Date(a.start)) / 1000);
+  for (const id of ["elapsed", "mini-elapsed"]) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = clock;
+  }
+  const rest = a.rest;
+  if (!rest) return;
   const left = (rest.endsAt - Date.now()) / 1000;
-  clock.textContent = fmtClock(Math.ceil(left));
-  document.getElementById("timer-bar").style.width = `${Math.max(0, Math.min(100, (left / rest.total) * 100))}%`;
+  const miniRest = document.getElementById("mini-rest");
+  if (miniRest) miniRest.textContent = left > 0 ? ` · Rest ${fmtClock(Math.ceil(left))}` : "";
   const timer = document.getElementById("timer");
-  timer.classList.toggle("over", left <= 0);
-  document.getElementById("timer-label").textContent = left > 0 ? "Rest" : "Rest done";
+  if (timer) {
+    document.getElementById("timer-clock").textContent = fmtClock(Math.ceil(left));
+    document.getElementById("timer-bar").style.width = `${Math.max(0, Math.min(100, (left / rest.total) * 100))}%`;
+    timer.classList.toggle("over", left <= 0);
+    document.getElementById("timer-label").textContent = left > 0 ? "Rest" : "Rest done";
+  }
   if (left <= 0 && alerted !== rest.endsAt) {
     alerted = rest.endsAt;
     if (left > -2) {
-      beep();
-      timer.classList.add("flash");
+      playSound(state.settings.sound);
+      timer?.classList.add("flash");
     }
   }
 }
@@ -186,30 +233,6 @@ actions["rest-skip"] = () => {
   state.active.rest = null;
   return saveActive();
 };
-
-// Sound needs an AudioContext created during a user gesture on iOS.
-let audio;
-function unlockAudio() {
-  if (audio) return;
-  try {
-    if (navigator.audioSession) navigator.audioSession.type = "transient";
-    audio = new AudioContext();
-  } catch { audio = null; }
-}
-function beep() {
-  if (!audio) return;
-  for (const [at, freq] of [[0, 880], [0.22, 1175]]) {
-    const osc = audio.createOscillator();
-    const gain = audio.createGain();
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.0001, audio.currentTime + at);
-    gain.gain.exponentialRampToValueAtTime(0.4, audio.currentTime + at + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + at + 0.18);
-    osc.connect(gain).connect(audio.destination);
-    osc.start(audio.currentTime + at);
-    osc.stop(audio.currentTime + at + 0.2);
-  }
-}
 
 // --- Wake lock: keep the screen on during a workout so the timer stays visible ----------
 
@@ -232,7 +255,7 @@ window.addEventListener("hashchange", updateWakeLock);
 // --- Start --------------------------------------------------------------------------------
 
 await loadState();
-applyTheme();
+applyAppearance();
 render();
 updateWakeLock();
 persist();

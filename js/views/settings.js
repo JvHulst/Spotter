@@ -8,6 +8,11 @@ import { cleanSession } from "../history.js";
 import { parseCsv, csvKind, weighIns, strongSessions } from "../strong.js";
 import { connect, disconnect, sync, syncStatus } from "../sync.js";
 import { actions, ask, esc, fmtClock, fmtKg, plural, toast, ago } from "../ui.js";
+import { SOUNDS, DEFAULT_SOUND, playSound } from "../sounds.js";
+
+/** Accent colors; red is the default of the stylesheet (--accent in css/app.css). */
+const ACCENTS = { red: "#d93d42", orange: "#cc420b", blue: "#2f6fe4", green: "#26883f" };
+const SOUND_CHOICES = { ...Object.fromEntries(Object.entries(SOUNDS).map(([id, s]) => [id, s.label])), off: "Off" };
 
 let status = null;
 
@@ -63,11 +68,16 @@ export function settingsView() {
       <div class="eyebrow">Rest timer</div>
       ${rest("restCompound", "Compound")}${rest("restIsolation", "Isolation")}
       ${rest("restSuperset", "Superset")}${rest("restWarmup", "Warm-up")}
+      <div class="small muted" style="margin:10px 0 6px">Sound when the rest ends</div>
+      <div class="chips" style="flex-wrap:wrap">${Object.entries(SOUND_CHOICES).map(([id, label]) =>
+        `<button class="chip ${(s.sound ?? DEFAULT_SOUND) === id ? "on" : ""}" data-action="sound" data-id="${id}">${label}</button>`).join("")}</div>
     </section>
     <section class="card">
       <div class="eyebrow">Appearance</div>
       <div class="chips" style="margin-top:8px">${["system", "dark", "light"].map((t) =>
         `<button class="chip ${theme === t ? "on" : ""}" data-action="theme" data-t="${t}" style="text-transform:capitalize">${t}</button>`).join("")}</div>
+      <div class="chips" style="margin-top:8px">${Object.entries(ACCENTS).map(([name, color]) =>
+        `<button class="chip swatch ${s.accent === name ? "on" : ""}" data-action="accent" data-a="${name}" style="--swatch:${color};text-transform:capitalize">${name}</button>`).join("")}</div>
     </section>
     <button class="btn block danger" data-action="wipe">Delete all data on this device</button>`;
   return { title: "Settings", back: "#today", body };
@@ -243,14 +253,36 @@ actions["rest-step"] = ({ key, d }) => {
 
 actions.theme = ({ t }) => {
   state.settings.theme = t;
-  applyTheme();
+  applyAppearance();
   return saveSettings();
 };
 
-export function applyTheme() {
-  const t = state.settings.theme;
-  if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
-  else delete document.documentElement.dataset.theme;
+actions.accent = ({ a }) => {
+  state.settings.accent = a;
+  applyAppearance();
+  return saveSettings();
+};
+
+// Choosing a sound plays it, as a preview. The tap that chose it has unlocked the audio.
+actions.sound = ({ id }) => {
+  state.settings.sound = id;
+  playSound(id);
+  return saveSettings();
+};
+
+/** Set the theme and accent color on the root element; the default red needs no override. */
+export function applyAppearance() {
+  const { theme, accent } = state.settings;
+  const root = document.documentElement;
+  if (theme === "dark" || theme === "light") root.dataset.theme = theme;
+  else delete root.dataset.theme;
+  if (accent !== "red" && ACCENTS[accent]) {
+    root.dataset.accent = accent;
+    root.style.setProperty("--accent", ACCENTS[accent]);
+  } else {
+    delete root.dataset.accent;
+    root.style.removeProperty("--accent");
+  }
 }
 
 actions.wipe = async () => {
@@ -258,7 +290,7 @@ actions.wipe = async () => {
   await clearAll();
   Object.assign(state, { program: defaultProgram(), sessions: [], deleted: {}, weights: {}, latestWeight: null, active: null, settings: { ...DEFAULT_SETTINGS } });
   reindex();
-  applyTheme();
+  applyAppearance();
   status = null;
   toast("All data deleted");
 };
