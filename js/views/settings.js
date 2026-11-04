@@ -57,7 +57,7 @@ export function settingsView() {
     </a>
     <section class="card">
       <div class="eyebrow">Favorites</div>
-      <p class="small muted" style="margin:6px 0 10px">A favorite takes every slot of its movement in the training days and never rotates.
+      <p class="small muted" style="margin:6px 0 10px">A favorite takes every slot of its movement in the training days, the one starred last when several fit, and never rotates.
         A training day starts with a favorite when one fits it. Tap the star on an exercise's page in the Library to add or remove it.</p>
       <div class="chips" style="flex-wrap:wrap">${favorites().filter((id) => exercise(id)).map((id) =>
         `<a class="chip" href="#exercise-${id}">★ ${esc(exercise(id).name)}</a>`).join("") || `<span class="small muted">No favorites</span>`}</div>

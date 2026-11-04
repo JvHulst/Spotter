@@ -25,6 +25,7 @@ const check = (name, actual, expected) => {
 const today = new Date(2026, 9, 29);
 const daysAgo = (n) => new Date(today.getTime() - n * 86400000);
 const db = { load: "none", increment: 4, equipment: "dumbbell" };
+const barbell = { load: "none", increment: 2.5, equipment: "barbell" };
 const target = { reps: [5, 8], rir: [1, 2] };
 const plan = (ex, sets, gap, nSets = 3, t = target) => planExercise({
   ex, target: t, nSets, today, bodyweight: 90,
@@ -36,17 +37,20 @@ check("e1rm", Math.round(e1rm(68, 8, 1) * 10) / 10, 88.4);
 check("up: first set at the top with RIR >= 1", brief(plan(db, [[68, 8, 1], [68, 8, 1], [68, 8, 2]], 5)),
   { mode: "up", kg: [72, 72, 72], reps: [6, 6, 6] });
 check("up: Strong sets without RIR", plan(db, [[68, 8], [68, 8], [68, 8]], 5).mode, "up");
-check("up: the first set decides, later sets may fall short", brief(plan(db, [[68, 8, 1], [68, 7, 1], [68, 6, 1]], 5)),
-  { mode: "up", kg: [72, 72, 72], reps: [5, 5, 5] });
-check("up: a first set below the top does not add load", plan(db, [[68, 7, 1], [68, 8, 1], [68, 8, 1]], 5).mode, "reps");
-check("reps: one more rep per set", brief(plan(db, [[68, 7, 1], [68, 7, 1], [68, 6, 1]], 5)),
-  { mode: "reps", kg: [68, 68, 68], reps: [8, 8, 7] });
-check("reps: top reached only at RIR 0", brief(plan(db, [[68, 8, 0], [68, 8, 0], [68, 8, 0]], 5)),
-  { mode: "reps", kg: [68, 68, 68], reps: [8, 8, 8] });
-check("reps: back-off sets are ignored", brief(plan(db, [[68, 7, 1], [68, 6, 1], [56, 10, 1]], 5)),
-  { mode: "reps", kg: [68, 68, 68], reps: [8, 7, 7] });
-check("down: below the rep range", brief(plan(db, [[68, 4, 0], [68, 4, 0], [68, 3, 0]], 5)),
-  { mode: "down", kg: [64, 64, 64], reps: [5, 5, 5] });
+check("up: the first set decides, later sets keep their drop", brief(plan(db, [[68, 8, 1], [68, 7, 1], [68, 6, 1]], 5)),
+  { mode: "up", kg: [72, 72, 72], reps: [6, 5, 4] });
+check("up: a weight step when it asks less than one more rep", brief(plan(barbell, [[80, 6, 1], [80, 6, 1], [80, 5, 1]], 5)),
+  { mode: "up", kg: [82.5, 82.5, 82.5], reps: [5, 5, 4] });
+check("reps: one more rep when it asks less than a weight step", brief(plan(barbell, [[82.5, 5, 1], [82.5, 5, 1], [82.5, 4, 1]], 5)),
+  { mode: "reps", kg: [82.5, 82.5, 82.5], reps: [6, 6, 5] });
+check("reps: a first set past the target RIR asks the same reps with more in reserve", brief(plan(barbell, [[85, 6, 0], [85, 6, 0], [85, 5, 0]], 5)),
+  { mode: "reps", kg: [85, 85, 85], reps: [6, 6, 5] });
+check("down: 5 reps at RIR 0 fall short of 5 reps at RIR 1", brief(plan(barbell, [[85, 5, 0], [85, 5, 0], [85, 4, 0]], 5)),
+  { mode: "down", kg: [82.5, 82.5, 82.5], reps: [6, 6, 5] });
+check("up: back-off sets are ignored", brief(plan(db, [[68, 7, 1], [68, 6, 1], [56, 10, 1]], 5)),
+  { mode: "up", kg: [72, 72, 72], reps: [5, 4, 4] });
+check("down: a first set short of the range at the target RIR", brief(plan(db, [[68, 4, 0], [68, 4, 0], [68, 3, 0]], 5)),
+  { mode: "down", kg: [64, 64, 64], reps: [6, 6, 5] });
 check("return after 4 weeks: same weight, fewer reps", brief(plan(db, [[68, 8, 1], [68, 8, 1], [68, 8, 1]], 28)),
   { mode: "return", kg: [68, 68, 68], reps: [6, 6, 6] });
 check("return after 10 months: 18% lighter", brief(plan(db, [[68, 8, 1], [68, 8, 1], [68, 8, 1]], 300)),
@@ -75,7 +79,7 @@ check("finisher: drop set 25% lighter, same reps", finisherSets("drop", 20, 12, 
 check("finisher: myo-reps, three mini-sets of a third", finisherSets("myo", 16, 15, db).map((x) => x.reps), [5, 5, 5]);
 check("finisher sets do not steer the plan", brief(planExercise({ ex: db, target, nSets: 2, today, bodyweight: 90,
   history: [{ date: daysAgo(5), sets: [{ kg: 68, reps: 8, rir: 1 }, { kg: 68, reps: 8, rir: 1 }, { kg: 68, reps: 3, rir: 0, type: "myo" }] }] })),
-  { mode: "up", kg: [72, 72], reps: [5, 5] });
+  { mode: "up", kg: [72, 72], reps: [6, 6] });
 check("finisher sets count half for volume", setCount([{ kg: 1, reps: 1 }, { kg: 1, reps: 1, type: "drop" }, { kg: 1, reps: 1, type: "myo" }]), 2);
 check("warm-ups: dumbbell compound", warmupSets(68, db), [{ kg: 32, reps: 8 }, { kg: 44, reps: 5 }, { kg: 56, reps: 3 }]);
 const bar = { load: "none", increment: 2.5, equipment: "barbell" };
@@ -257,7 +261,7 @@ check("settings: an unknown sound falls back to the bell", cleanSettings({ sound
   const tv = (id, key) => `${JSON.stringify(trainingValue(id, key).value)} ${trainingValue(id, key).from}`;
   check("training: the exercise's own value comes first", tv("lateral-raise-dumbbell", "rest"), "60 exercise");
   check("training: then the user's value for the category", tv("lateral-raise-dumbbell", "rir"), "[1,2] category");
-  check("training: then the default of the category", tv("squat-barbell", "reps"), "[5,6] default");
+  check("training: then the default of the category", tv("squat-barbell", "reps"), "[5,8] default");
   check("training: squat and deadlift variations and leg press rest longer",
     [tv("squat-barbell", "rest"), tv("leg-press", "rest"), tv("romanian-deadlift-dumbbell", "rest"), tv("bench-press-barbell", "rest")],
     ["150 category", "150 category", "150 category", "120 default"]);

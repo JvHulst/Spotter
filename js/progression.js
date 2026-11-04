@@ -53,12 +53,20 @@ export function snapToGrid(fromKg, targetLoad, ex, bodyweight, { round = Math.ro
  * history: earlier sessions with this exercise, oldest first, as {date, sets} with working
  * sets only. target: {reps: [low, high], rir: [low, high]}. bodyweight is in kg.
  * Returns {mode, sets: [{kg, reps}], rir, reason}; kg is null when there is no history.
- * Modes: "new" (no history), "return" (long gap), "up" (add load), "reps" (add reps at the
- * same load), and "down" (below the rep range last time). An exercise without a load increment
- * progresses by reps only, beyond the range.
+ * Modes: "new" (no history), "return" (long gap), "up" (heavier), "reps" (same weight, more
+ * reps) and "down" (lighter).
  *
- * The lead set, the first set at the top load, decides whether to add load. Later sets of an
- * exercise end with fewer reps because of fatigue, so they would only delay progress.
+ * The plan builds on last time's lead set, the first set at the top load: its weight, reps and
+ * RIR estimate strength (Epley, with the RIR counted as reps that could still have been done).
+ * The new lead set is the smallest step above that estimate at the lower target RIR, among the
+ * same weight with more reps and the next weight step with any reps in the range. Adding reps
+ * and adding load give similar growth (Plotkin et al. 2022, PeerJ 10:e14142), so the smaller
+ * step comes first; with heavy weights that is mostly a weight step, since one more rep asks
+ * for about 3% more strength. Loads chosen by effort in this way did at least as well as fixed
+ * percentages (Helms et al. 2018, Front. Physiol. 9:247). A lighter weight is planned only when
+ * the lead set fell short of the rep range at the target RIR. Later sets keep last time's drop
+ * in reps from fatigue. An exercise without a load step progresses by one more rep per set,
+ * beyond the range.
  */
 export function planExercise({ ex, target, history, nSets, today, bodyweight: bw }) {
   const [lo, hi] = target.reps;
@@ -93,32 +101,32 @@ export function planExercise({ ex, target, history, nSets, today, bodyweight: bw
       reason: `Back after a break: ${change > 0 ? `${change}% lighter` : "same weight"}, ${reps} reps at RIR ${rirHi}` };
   }
 
-  const byLoad = ex.increment > 0;
   const lead = top[0];
-  if (byLoad && lead.reps >= hi && (lead.rir == null || lead.rir >= rirLo)) {
-    const kg = round2(topKg + heavier(ex) * ex.increment);
-    const reps = clamp(Math.floor(repsFor(strength, effectiveLoad(kg, ex, bw), rirLo)), lo, hi);
-    const withRir = lead.rir != null ? ` with RIR ≥ ${rirLo}` : "";
-    return { mode: "up", sets: sets(kg, reps), rir: rirLo,
-      reason: `${heavier(ex) > 0 ? "+" : "−"}${ex.increment} kg: the first set reached ${hi} reps${withRir}` };
+  if (!(ex.increment > 0)) {
+    // Without a load step: one more rep per set, except after a set that went past the target RIR.
+    const reps = Array.from({ length: nSets }, (_, i) => {
+      const s = top[Math.min(i, top.length - 1)];
+      return s.reps + (s.rir != null && s.rir < rirLo ? 0 : 1);
+    });
+    return { mode: "reps", sets: sets(topKg, reps), rir: rirLo, reason: "Same load: one more rep per set" };
   }
 
-  if (byLoad && Math.max(...top.map((s) => s.reps)) < lo) {
-    const kg = Math.max(0, round2(topKg - heavier(ex) * ex.increment));
-    return { mode: "down", sets: sets(kg, lo), rir: rirLo,
-      reason: `Below ${lo} reps last time: ${ex.increment} kg lighter` };
+  const done = e1rm(topLoad, lead.reps, lead.rir ?? ASSUMED_RIR);
+  const short = done < e1rm(topLoad, lo, rirLo) - 1e-9;
+  const options = [];
+  for (const k of short ? [-1, 0, 1] : [0, 1]) {
+    const kg = Math.max(0, round2(topKg + heavier(ex) * k * ex.increment));
+    for (let r = lo; r <= hi; r++) options.push({ kg, reps: r, demand: e1rm(effectiveLoad(kg, ex, bw), r, rirLo) });
   }
-
-  // Same load: one more rep per set, except after a set that went past the target RIR.
-  const reps = Array.from({ length: nSets }, (_, i) => {
-    const s = top[Math.min(i, top.length - 1)];
-    const next = s.reps + (s.rir != null && s.rir < rirLo ? 0 : 1);
-    return byLoad ? Math.min(hi, next) : next;
-  });
-  const reason = !byLoad ? "Same load: one more rep per set"
-    : lead.reps >= hi ? `Same weight: reach ${hi} reps with RIR ≥ ${rirLo} in the first set before adding load`
-    : `Same weight: one more rep per set, up to ${hi}`;
-  return { mode: "reps", sets: sets(topKg, reps), rir: rirLo, reason };
+  const harder = options.filter((o) => o.demand > done + 1e-9);
+  const next = harder.length ? harder.reduce((a, b) => (b.demand < a.demand ? b : a))
+    : options.reduce((a, b) => (b.demand > a.demand ? b : a));
+  const reps = Array.from({ length: nSets }, (_, i) => Math.max(1, next.reps - Math.max(0, lead.reps - top[Math.min(i, top.length - 1)].reps)));
+  const mode = next.kg === topKg ? "reps" : (next.kg - topKg) * heavier(ex) > 0 ? "up" : "down";
+  const reason = mode === "up" ? `${heavier(ex) > 0 ? "+" : "−"}${ex.increment} kg, ${next.reps} reps: the smallest step up from last time`
+    : mode === "reps" ? `Same weight, ${next.reps} reps: the smallest step up from last time`
+    : `${ex.increment} kg lighter: last time's first set fell short of ${lo} reps at RIR ${rirLo}`;
+  return { mode, sets: sets(next.kg, reps), rir: rirLo, reason };
 }
 
 /**

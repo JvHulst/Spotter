@@ -213,8 +213,8 @@ export function slotOptions({ pattern: p, prefer = [] }) {
  * template of the user's own is fixed: each slot is the exercise saved in it, in its order.
  *
  * A built-in day is adaptive. A slot gets a favorite of its movement pattern, the one last logged
- * in it if there are several, else the exercise last logged in it, with no exercise in two
- * slots. It then rotates to another exercise when a change is due (see proposeChange); such a
+ * in it if there are several and else the one starred last, or without a favorite the exercise
+ * last logged in it, with no exercise in two slots. It then rotates to another exercise when a change is due (see proposeChange); such a
  * slot also has `rotated`, {from, why}. The day starts with a favorite when one fits it, another
  * one than the first exercise of the last workout when it can; a slot that pairs with a
  * neighbor in a superset keeps its place.
@@ -224,7 +224,7 @@ export function dayPlan(t) {
   const taken = [];
   const plan = t.slots.map((slot) => {
     const fits = favorites().filter((id) => exercise(id)?.pattern === slot.pattern && !taken.includes(id));
-    const choice = fits.find((id) => id === state.slotLast.get(slot.id)) ?? fits[0] ?? slotChoice(slot);
+    const choice = fits.find((id) => id === state.slotLast.get(slot.id)) ?? fits.at(-1) ?? slotChoice(slot);
     const id = taken.includes(choice) ? slotOptions(slot).find((x) => !taken.includes(x)) : choice;
     taken.push(id);
     return { slot, id };
