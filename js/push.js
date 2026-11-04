@@ -63,7 +63,13 @@ function prepare(rest) {
 
 const send = (path, data) => navigator.sendBeacon(`${PUSH_SERVER}/${path}`, new Blob([JSON.stringify(data)], { type: "text/plain" }));
 
+/** Remove the alerts shown so far from the phone's notification list. */
+const clearAlerts = () => navigator.serviceWorker?.ready.then((r) => r.getNotifications())
+  .then((shown) => shown.forEach((n) => n.close())).catch(() => {});
+
+clearAlerts();
 document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible") clearAlerts();
   if (device.alert !== "push" || !device.push || !PUSH_SERVER) return;
   if (document.visibilityState === "visible") {
     if (requested) send("cancel", { endpoint: device.push.endpoint });
