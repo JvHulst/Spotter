@@ -37,15 +37,20 @@ export function exerciseCategory(id) {
 }
 export const CATEGORY_LABEL = { heavy: "Barbell compounds", compound: "Other compounds", isolation: "Isolations" };
 
+/** Movement patterns of squat and deadlift variations, which rest settings.restSquatHinge. */
+const SQUAT_HINGE = new Set(["squat", "hinge"]);
+
 /**
  * A training value of an exercise ("reps", "rir", "rest" or "warmup", see CATEGORY_DEFAULTS) and
- * where it comes from: the exercise's own exception ("exercise"), the user's value for its
- * category ("category") or the default of its category ("default").
+ * where it comes from: the exercise's own exception ("exercise"), a setting of Settings
+ * ("category": the user's value for its category, or the rest of squat and deadlift variations)
+ * or the default of its category ("default").
  */
 export function trainingValue(id, key) {
   const category = exerciseCategory(id);
   const own = state.program?.exercises?.[id]?.[key];
   if (own != null) return { value: own, from: "exercise" };
+  if (key === "rest" && SQUAT_HINGE.has(exercise(id).pattern)) return { value: state.settings.restSquatHinge, from: "category" };
   const mine = state.settings.categories[category][key];
   return mine != null ? { value: mine, from: "category" } : { value: CATEGORY_DEFAULTS[category][key], from: "default" };
 }
@@ -282,14 +287,14 @@ export function proposeChange(id, slot, exclude, { bodyweightOnly = false } = {}
   return to ? { to, why: stall ? "No new best in 4 workouts" : `${weeks} weeks on this exercise` } : null;
 }
 
-/** Finishers only go on isolation exercises, where a set to failure costs little recovery. */
-export const allowsFinisher = (id) => pattern(id).kind === "isolation";
+/** Finishers a slot can plan after its working sets. The built-in days put them on isolation
+ *  exercises, where a set to failure costs little recovery, and any exercise can have one. */
 export const FINISHERS = ["", "drop", "myo"];
 
-/** The set types that can follow each other when a set's label is tapped: working set, warm-up,
- *  drop set, and for isolation exercises a myo-reps mini-set. */
-export const setTypes = (id) => ["", "warmup", "drop", ...(allowsFinisher(id) ? ["myo"] : [])];
-/** Names of the set types, keyed "work" for a working set (the key "" of setTypes). */
+/** The types a set can have, chosen by tapping its label: working set, warm-up, drop set and
+ *  myo-reps mini-set. */
+export const SET_TYPES = ["", "warmup", "drop", "myo"];
+/** Names of the set types, keyed "work" for a working set (the key "" of SET_TYPES). */
 export const SET_TYPE_LABEL = { work: "Working set", warmup: "Warm-up", drop: "Drop set", myo: "Myo-reps" };
 
 /** Store a choice made in a workout as an override of a built-in slot. The user's own templates

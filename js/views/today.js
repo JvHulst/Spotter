@@ -5,7 +5,7 @@
 
 import { state, exercise, saveProgram } from "../state.js";
 import { template, splits, activeSplit, rotation, dayPlan, ownTemplate, createTemplate, addTemplateSlot, replaceTemplateSlot,
-  forkDay, resetDay, allowsFinisher, FINISHERS, FINISHER_LABEL } from "../program.js";
+  forkDay, resetDay, FINISHERS, FINISHER_LABEL } from "../program.js";
 import { suggestedTemplateId, planFor, startWorkout } from "../workout.js";
 import { sessionsWithin } from "../history.js";
 import { actions, ask, choose, esc, fmtKg, since, modeBadge, icon } from "../ui.js";
@@ -28,7 +28,7 @@ export function today() {
     return `
       <div class="plan-row">
         <div class="grow"><div class="eyebrow">${esc(slot.name ?? exercise(id).muscle)}</div><div class="ellipsis">${esc(exercise(id).name)}</div></div>
-        <div class="target num">${load}<div class="small muted">${slot.sets} × ${first.reps}${slot.finisher && allowsFinisher(id) ? ` + ${slot.finisher === "drop" ? "drop" : "myo"}` : ""}</div></div>
+        <div class="target num">${load}<div class="small muted">${slot.sets} × ${first.reps}${slot.finisher ? ` + ${slot.finisher === "drop" ? "drop" : "myo"}` : ""}</div></div>
         <div>${modeBadge(plan.mode)}</div>
       </div>`;
   }).join("");
@@ -139,7 +139,7 @@ export function templateView(id) {
           <span class="num">${slot.sets} sets</span>
           <button data-action="tpl-sets" data-id="${id}" data-i="${i}" data-d="1" aria-label="More sets">+</button>
         </div>
-        ${allowsFinisher(slot.ex) ? `<button class="chip small ${slot.finisher ? "on" : ""}" data-action="tpl-finisher" data-id="${id}" data-i="${i}">${slot.finisher ? FINISHER_LABEL[slot.finisher] : "No finisher"}</button>` : ""}
+        <button class="chip small ${slot.finisher ? "on" : ""}" data-action="tpl-finisher" data-id="${id}" data-i="${i}">${slot.finisher ? FINISHER_LABEL[slot.finisher] : "No finisher"}</button>
       </div>
     </div>`).join("");
   const body = `

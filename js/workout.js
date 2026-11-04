@@ -7,10 +7,10 @@ import { planExercise, nextSetWeight, warmupSets, finisherSets, nextTemplateId }
 import { state, exercise, bodyweight, saveActive, saveProgram, saveSessions } from "./state.js";
 import { splitWeighted } from "./strong.js";
 import { template, rotation, dayPlan, targetFor, restFor, warmupFor, setTrainingValue, ownTemplate, createTemplate, setTemplateSlots,
-  allowsFinisher, setSlotOption } from "./program.js";
+  setSlotOption } from "./program.js";
 import { afterSet, firstOpen as firstOpenIn } from "./rest.js";
 import { carryDown } from "./carry.js";
-import { restStarted } from "./push.js";
+import { restChanged } from "./push.js";
 
 export const suggestedTemplateId = () => nextTemplateId(rotation(), state.sessions);
 
@@ -27,7 +27,7 @@ function entryFor(id, slot, nSets = slot?.sets ?? 3) {
   const warmup = warmupFor(id);
   const warmups = warmup ? warmupSets(plan.sets[0].kg, exercise(id)) : [];
   const last = plan.sets.at(-1);
-  const finisher = allowsFinisher(id) ? slot?.finisher ?? "" : "";
+  const finisher = slot?.finisher ?? "";
   return {
     ex: id, slot: slot?.id ?? null, superset: Boolean(slot?.superset), finisher, warmup, note: "",
     plan: { mode: plan.mode, reason: plan.reason },
@@ -114,10 +114,8 @@ export async function setType(e, s, type) {
   else set.rir ??= targetFor(entry.ex).rir[0];
   entry.finisher = entry.sets.find((x) => x.type)?.type ?? "";
   replan(entry);
-  if (allowsFinisher(entry.ex)) {
-    setSlotOption(state.active.template, entry.slot, "finisher", entry.finisher);
-    await saveProgram();
-  }
+  setSlotOption(state.active.template, entry.slot, "finisher", entry.finisher);
+  await saveProgram();
   await saveActive();
 }
 
@@ -133,7 +131,7 @@ export async function logSet(e, s) {
   const next = afterSet(state.active.exercises, e, s, { warmup: settings.restWarmup, superset: settings.restSuperset, of: restFor });
   state.active.focus = next?.focus ?? null;
   state.active.rest = next ? { endsAt: Date.now() + next.rest * 1000, total: next.rest } : null;
-  restStarted();
+  restChanged();
   await saveActive();
 }
 

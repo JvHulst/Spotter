@@ -10,7 +10,7 @@ import { connect, disconnect, sync, syncStatus } from "../sync.js";
 import { actions, ask, esc, fmtClock, fmtKg, plural, toast, ago } from "../ui.js";
 import { SOUNDS, DEFAULT_SOUND, playSound } from "../sounds.js";
 import { trainingRows } from "./training.js";
-import { alertMode, setAlertMode, pushSupported, SHORTCUT } from "../push.js";
+import { alertMode, setAlertMode, pushSupported } from "../push.js";
 
 /** Accent colors; red is the default of the stylesheet (--accent in css/app.css). */
 const ACCENTS = { red: "#d93d42", orange: "#cc420b", blue: "#2f6fe4", green: "#26883f" };
@@ -62,7 +62,7 @@ export function settingsView() {
     </section>
     <section class="card">
       <div class="eyebrow">Rest timer</div>
-      ${rest("restSuperset", "Superset")}${rest("restWarmup", "After a warm-up set")}
+      ${rest("restSquatHinge", "Squats and deadlifts")}${rest("restSuperset", "Superset")}${rest("restWarmup", "After a warm-up set")}
       <div class="small muted" style="margin:10px 0 6px">Sound when the rest ends</div>
       <div class="chips" style="flex-wrap:wrap">${Object.entries(SOUND_CHOICES).map(([id, label]) =>
         `<button class="chip ${(s.sound ?? DEFAULT_SOUND) === id ? "on" : ""}" data-action="sound" data-id="${id}">${label}</button>`).join("")}</div>
@@ -82,14 +82,12 @@ export function settingsView() {
 /** How a rest ends while Spotter is in the background, chosen per device. */
 function alertCard() {
   const mode = alertMode();
-  const modes = { off: "Off", push: "Notification", timer: "iPhone timer" };
+  const modes = { off: "Off", push: "Notification" };
   const help = {
     off: "The sound plays only while Spotter is open.",
-    push: pushSupported() ? "A notification with the iPhone's sound ends the rest when Spotter is in the background or the phone is locked. Music keeps playing."
+    push: pushSupported() ? `A notification ends the rest when Spotter is in the background or the phone is locked.
+      It plays the iPhone's notification sound over your music, and silent mode silences it.`
       : "Notifications need Spotter on the home screen.",
-    timer: `Each rest starts the iPhone's timer, with a countdown on the lock screen, and opens the Shortcuts app for a moment.
-      Create the shortcut once: in Shortcuts, add a shortcut named <b>${SHORTCUT}</b> with the action Start Timer,
-      tap its duration, choose Shortcut Input and set it to seconds.`,
   };
   return `
     <div class="small muted" style="margin:14px 0 6px">When Spotter is in the background (this device)</div>

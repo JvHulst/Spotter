@@ -11,7 +11,7 @@
 // of the user's own template shows neither (see adaptive in workout.js).
 
 import { state, exercise, bodyweight, setWeight, saveActive, saveProgram } from "../state.js";
-import { template, targetFor, alternativeSections, proposeChange, plainBodyweight, setTypes, SET_TYPE_LABEL, bigThreeRecords } from "../program.js";
+import { template, targetFor, alternativeSections, proposeChange, plainBodyweight, SET_TYPES, SET_TYPE_LABEL, bigThreeRecords } from "../program.js";
 import { muscleStats, muscleShares } from "../history.js";
 import { MUSCLES } from "../library.js";
 import { WEEKLY_SETS_GUIDE } from "./muscles.js";
@@ -179,7 +179,7 @@ actions.tick = (d) => {
 actions["set-type"] = async (d) => {
   const entry = state.active.exercises[+d.e];
   const current = typeOf(setAt(d)) || "work";
-  const options = setTypes(entry.ex).map((t) => ({ key: t || "work", label: SET_TYPE_LABEL[t || "work"], on: (t || "work") === current }));
+  const options = SET_TYPES.map((t) => ({ key: t || "work", label: SET_TYPE_LABEL[t || "work"], on: (t || "work") === current }));
   const pick = await choose(`Set ${+d.s + 1} of ${exercise(entry.ex).name}`, options);
   if (pick && pick !== current) return setType(+d.e, +d.s, pick === "work" ? "" : pick);
   return "keep";

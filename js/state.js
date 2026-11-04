@@ -28,10 +28,13 @@ export const CATEGORY_DEFAULTS = {
 
 /** Settings that differ from these defaults are stored; the others follow the defaults, also when
  *  a release changes them. `categories` holds the user's own values per category, keyed as in
- *  CATEGORY_DEFAULTS. `accent` is a key of ACCENTS in views/settings.js and `sound` a key of
- *  SOUNDS in sounds.js or "off". */
+ *  CATEGORY_DEFAULTS. `restSquatHinge` is the rest after a working set of a squat or deadlift
+ *  variation, which takes the place of its category's rest: these lifts tire the whole body most,
+ *  and longer rests between multi-joint sets gave more strength and growth in trained men
+ *  (Schoenfeld et al. 2016, J. Strength Cond. Res. 30:1805). `accent` is a key of ACCENTS in
+ *  views/settings.js and `sound` a key of SOUNDS in sounds.js or "off". */
 export const DEFAULT_SETTINGS = {
-  restSuperset: 45, restWarmup: 60, theme: "dark", accent: "red", sound: DEFAULT_SOUND, bodyweight: 80,
+  restSquatHinge: 150, restSuperset: 45, restWarmup: 60, theme: "dark", accent: "red", sound: DEFAULT_SOUND, bodyweight: 80,
   categories: { heavy: {}, compound: {}, isolation: {} },
 };
 

@@ -158,8 +158,11 @@ export function finisherSets(kind, kg, reps, ex) {
   return [];
 }
 
-/** Fractions of the working weight that warm-up sets of a compound exercise aim for. */
+/** Fractions of the working weight that warm-up sets aim for: from about half of it up to close
+ *  to it, with fewer reps as the load rises (see warmupReps). */
 const WARMUP_STEPS = [0.5, 0.7, 0.85];
+/** The largest step between two warm-up loads, in kg, so heavier working weights get more warm-ups. */
+const WARMUP_JUMP = 50;
 /** Reps of a warm-up set by its fraction of the working weight: more reps when lighter. */
 const warmupReps = (fraction) => (fraction < 0.6 ? 8 : fraction < 0.8 ? 5 : 3);
 const BAR = 20;
@@ -185,17 +188,32 @@ function plateLoadings(kg) {
 }
 
 /**
+ * The loads warm-ups aim for: WARMUP_STEPS of the working weight, with evenly spaced loads added
+ * wherever two of them, or `start` and the first, lie more than WARMUP_JUMP apart.
+ */
+function warmupTargets(workKg, start) {
+  const targets = [];
+  let last = start;
+  for (const t of WARMUP_STEPS.map((f) => f * workKg)) {
+    const n = Math.max(1, Math.ceil((t - last) / WARMUP_JUMP - 1e-9));
+    for (let i = 1; i <= n; i++) targets.push(last + (i * (t - last)) / n);
+    last = t;
+  }
+  return targets;
+}
+
+/**
  * Warm-up sets before the working sets of an exercise with external load and a weight step.
  *
  * A barbell exercise starts with the empty bar. The next warm-ups are the loads on the way to
  * the working weight when its plates go on largest first, so each warm-up only adds plates. Of
  * the ways to load the working weight (see plateLoadings), the one whose intermediate loads lie
- * closest to WARMUP_STEPS is used. Other exercises get the WARMUP_STEPS loads rounded down to
- * their increment.
+ * closest to the warm-up targets (see warmupTargets) is used. Other exercises get the targets
+ * rounded down to their increment.
  */
 export function warmupSets(workKg, ex) {
   if (!workKg || ex.load !== "none" || !ex.increment) return [];
-  const targets = WARMUP_STEPS.map((f) => f * workKg);
+  const targets = warmupTargets(workKg, ex.equipment === "barbell" ? BAR : WARMUP_STEPS[0] * workKg);
   let loads;
   if (ex.equipment === "barbell") {
     if (workKg <= BAR) return [];

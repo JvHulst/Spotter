@@ -1,13 +1,12 @@
 // Rest alerts while Spotter is in the background or the phone is locked. This device's choice
-// (`alert`, not synced) is one of:
+// (`alert`, not synced) is "off" or "push".
 //
-// - "push": when the app goes to the background during a rest, it asks the push server
-//   (push/worker.js) for a push at the end of the rest, and when it comes back it cancels that
-//   request. The service worker shows the push as a notification with the system sound, which
-//   plays over music. The app encrypts the notification text for this device (RFC 8291), so the
-//   push server and the push service see only when an alert is due.
-// - "timer": each rest starts the iPhone's own timer through the shortcut named SHORTCUT, which
-//   shows a countdown on the lock screen. Starting it switches to the Shortcuts app.
+// With "push", the app asks the push server (push/worker.js) for a push at the end of the rest
+// when it goes to the background during a rest, and cancels that request when it comes back. The
+// service worker shows the push as a notification. The iPhone plays its own notification sound
+// with it, over music and not in silent mode; a web app cannot choose that sound. The app
+// encrypts the notification text for this device (RFC 8291), so the push server and the push
+// service see only when an alert is due.
 
 import { kv } from "./db.js";
 import { state, exercise } from "./state.js";
@@ -15,13 +14,12 @@ import { fmtKg } from "./ui.js";
 
 /** The push server, deployed with push/deploy.py; empty while there is none. */
 export const PUSH_SERVER = "https://spotter-push.spotter-jvhulst.workers.dev";
-/** The shortcut that starts a timer for the number of seconds it receives as text. */
-export const SHORTCUT = "Spotter Rest";
 
 let device = { alert: "off", push: null };
 export const alertMode = () => device.alert;
 export async function loadDevice() {
   device = { ...device, ...(await kv.get("device")) };
+  if (device.alert !== "push") device.alert = "off";
 }
 
 /** Whether this browser can receive push: on an iPhone only in the app on the home screen. */
@@ -44,17 +42,7 @@ export async function setAlertMode(mode) {
   await kv.set("device", device);
 }
 
-/** The URL that runs the timer shortcut for `seconds`. */
-export const shortcutUrl = (seconds) => `shortcuts://run-shortcut?name=${encodeURIComponent(SHORTCUT)}&input=text&text=${Math.round(seconds)}`;
-
-/** A rest started: for "timer" start the iPhone's timer, which must happen in the handler of a
- *  tap, and for "push" prepare the alert. */
-export function restStarted() {
-  const rest = state.active?.rest;
-  if (rest && device.alert === "timer") location.href = shortcutUrl((rest.endsAt - Date.now()) / 1000);
-  restChanged();
-}
-/** The end of the rest changed: prepare the push alert for the new end. */
+/** A rest started or its end changed: prepare the push alert for the new end. */
 export function restChanged() {
   const rest = state.active?.rest;
   if (rest && device.alert === "push" && device.push) prepare(rest).catch(() => {});

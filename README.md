@@ -18,7 +18,7 @@ Within a training day, Spotter plans each exercise by double progression. The re
 | Other compounds | 8–12 | 0–1 |
 | Isolations | 10–20 | 0–1 |
 
-In a workout, each set shows its planned weight and reps in gray. Type over them if you did something else, and tap the check mark to log the set. Logging starts the rest timer, which plays a sound when the rest is over while Spotter is open. When Spotter is in the background, a rest can also end with a notification or with the iPhone's own timer, chosen in Settings.
+In a workout, each set shows its planned weight and reps in gray. Type over them if you did something else, and tap the check mark to log the set. Logging starts the rest timer, which plays a sound when the rest is over while Spotter is open. When Spotter is in the background, a rest can also end with a notification, chosen in Settings.
 
 The Progress tab shows workouts per week, estimated one-rep maxes, bodyweight, volume and records. The Muscles tab shows your sets per muscle over the last 7 days, and the Library tab shows each exercise with its records, steps and photos.
 

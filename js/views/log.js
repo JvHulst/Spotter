@@ -4,7 +4,7 @@
 import { state, exercise, bodyweight, saveSessions, deleteSession } from "../state.js";
 import { working, volumeOf, bestSet, setCount, setE1rm, sessionBest } from "../history.js";
 import { actions, ask, choose, esc, fmtDate, fmtKg, plural, ordinal, toast, RECORD_LABEL } from "../ui.js";
-import { setTypes, SET_TYPE_LABEL } from "../program.js";
+import { SET_TYPES, SET_TYPE_LABEL } from "../program.js";
 import { openSheet, closeSheet } from "./sheet.js";
 
 const PAGE = 30;
@@ -176,7 +176,7 @@ actions["s-set"] = ({ e, s: i, f }, el) => edit((s) => {
 actions["s-type"] = async ({ e, s: i }) => {
   const entry = state.sessions.find((x) => x.id === state.ui.editing).exercises[+e];
   const current = entry.sets[+i].warmup ? "warmup" : entry.sets[+i].type ?? "work";
-  const pick = await choose("Set type", setTypes(entry.ex).map((t) => ({ key: t || "work", label: SET_TYPE_LABEL[t || "work"], on: (t || "work") === current })));
+  const pick = await choose("Set type", SET_TYPES.map((t) => ({ key: t || "work", label: SET_TYPE_LABEL[t || "work"], on: (t || "work") === current })));
   if (!pick || pick === current) return "keep";
   return edit((s) => {
     const target = s.exercises[+e].sets[+i];
