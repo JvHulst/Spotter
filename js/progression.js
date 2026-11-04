@@ -56,6 +56,9 @@ export function snapToGrid(fromKg, targetLoad, ex, bodyweight, { round = Math.ro
  * Modes: "new" (no history), "return" (long gap), "up" (add load), "reps" (add reps at the
  * same load), and "down" (below the rep range last time). An exercise without a load increment
  * progresses by reps only, beyond the range.
+ *
+ * The lead set, the first set at the top load, decides whether to add load. Later sets of an
+ * exercise end with fewer reps because of fatigue, so they would only delay progress.
  */
 export function planExercise({ ex, target, history, nSets, today, bodyweight: bw }) {
   const [lo, hi] = target.reps;
@@ -91,13 +94,13 @@ export function planExercise({ ex, target, history, nSets, today, bodyweight: bw
   }
 
   const byLoad = ex.increment > 0;
-  const qualifies = (s) => s.reps >= hi && (s.rir == null || s.rir >= rirLo);
-  if (byLoad && top.every(qualifies)) {
+  const lead = top[0];
+  if (byLoad && lead.reps >= hi && (lead.rir == null || lead.rir >= rirLo)) {
     const kg = round2(topKg + heavier(ex) * ex.increment);
     const reps = clamp(Math.floor(repsFor(strength, effectiveLoad(kg, ex, bw), rirLo)), lo, hi);
-    const withRir = top.some((s) => s.rir != null) ? ` with RIR ≥ ${rirLo}` : "";
+    const withRir = lead.rir != null ? ` with RIR ≥ ${rirLo}` : "";
     return { mode: "up", sets: sets(kg, reps), rir: rirLo,
-      reason: `${heavier(ex) > 0 ? "+" : "−"}${ex.increment} kg: every set reached ${hi} reps${withRir}` };
+      reason: `${heavier(ex) > 0 ? "+" : "−"}${ex.increment} kg: the first set reached ${hi} reps${withRir}` };
   }
 
   if (byLoad && Math.max(...top.map((s) => s.reps)) < lo) {
@@ -113,7 +116,7 @@ export function planExercise({ ex, target, history, nSets, today, bodyweight: bw
     return byLoad ? Math.min(hi, next) : next;
   });
   const reason = !byLoad ? "Same load: one more rep per set"
-    : top.every((s) => s.reps >= hi) ? `Same weight: reach ${hi} reps with RIR ≥ ${rirLo} before adding load`
+    : lead.reps >= hi ? `Same weight: reach ${hi} reps with RIR ≥ ${rirLo} in the first set before adding load`
     : `Same weight: one more rep per set, up to ${hi}`;
   return { mode: "reps", sets: sets(topKg, reps), rir: rirLo, reason };
 }

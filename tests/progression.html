@@ -33,9 +33,12 @@ const plan = (ex, sets, gap, nSets = 3, t = target) => planExercise({
 const brief = (p) => ({ mode: p.mode, kg: p.sets.map((s) => s.kg), reps: p.sets.map((s) => s.reps) });
 
 check("e1rm", Math.round(e1rm(68, 8, 1) * 10) / 10, 88.4);
-check("up: all sets at top with RIR >= 1", brief(plan(db, [[68, 8, 1], [68, 8, 1], [68, 8, 2]], 5)),
+check("up: first set at the top with RIR >= 1", brief(plan(db, [[68, 8, 1], [68, 8, 1], [68, 8, 2]], 5)),
   { mode: "up", kg: [72, 72, 72], reps: [6, 6, 6] });
 check("up: Strong sets without RIR", plan(db, [[68, 8], [68, 8], [68, 8]], 5).mode, "up");
+check("up: the first set decides, later sets may fall short", brief(plan(db, [[68, 8, 1], [68, 7, 1], [68, 6, 1]], 5)),
+  { mode: "up", kg: [72, 72, 72], reps: [5, 5, 5] });
+check("up: a first set below the top does not add load", plan(db, [[68, 7, 1], [68, 8, 1], [68, 8, 1]], 5).mode, "reps");
 check("reps: one more rep per set", brief(plan(db, [[68, 7, 1], [68, 7, 1], [68, 6, 1]], 5)),
   { mode: "reps", kg: [68, 68, 68], reps: [8, 8, 7] });
 check("reps: top reached only at RIR 0", brief(plan(db, [[68, 8, 0], [68, 8, 0], [68, 8, 0]], 5)),
@@ -254,7 +257,7 @@ check("settings: an unknown sound falls back to the bell", cleanSettings({ sound
   const tv = (id, key) => `${JSON.stringify(trainingValue(id, key).value)} ${trainingValue(id, key).from}`;
   check("training: the exercise's own value comes first", tv("lateral-raise-dumbbell", "rest"), "60 exercise");
   check("training: then the user's value for the category", tv("lateral-raise-dumbbell", "rir"), "[1,2] category");
-  check("training: then the default of the category", tv("squat-barbell", "reps"), "[5,8] default");
+  check("training: then the default of the category", tv("squat-barbell", "reps"), "[5,6] default");
   check("training: squat and deadlift variations and leg press rest longer",
     [tv("squat-barbell", "rest"), tv("leg-press", "rest"), tv("romanian-deadlift-dumbbell", "rest"), tv("bench-press-barbell", "rest")],
     ["150 category", "150 category", "150 category", "120 default"]);

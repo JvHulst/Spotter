@@ -14,14 +14,15 @@ import { SOUNDS, DEFAULT_SOUND } from "./sounds.js";
  *
  * Heavy loads build more maximal strength while growth is similar across loads when sets end
  * near failure (Schoenfeld et al. 2017, J. Strength Cond. Res. 31:3508), so only barbell
- * compounds use low reps. Sets closer to failure add growth but not strength (Robinson et al.
+ * compounds use low reps. Their range is narrow, because with heavy weights an extra rep takes
+ * many sessions while the smallest step in load is a gain of its own. Sets closer to failure add growth but not strength (Robinson et al.
  * 2024, Sports Med. 54:2209), and failure costs little on a machine or an isolation exercise but
  * much fatigue and risk under a heavy bar, so only barbell compounds stop short of it. Rest beyond
  * about 90 s shows no detectable extra growth (Singer et al. 2024, Front. Sports Act. Living
  * 6:1429789); compound lifts get a little more. Isolation loads are too light to need warm-ups.
  */
 export const CATEGORY_DEFAULTS = {
-  heavy: { reps: [5, 8], rir: [1, 2], rest: 120, warmup: true },
+  heavy: { reps: [5, 6], rir: [1, 2], rest: 120, warmup: true },
   compound: { reps: [8, 12], rir: [0, 1], rest: 120, warmup: true },
   isolation: { reps: [10, 20], rir: [0, 1], rest: 90, warmup: false },
 };

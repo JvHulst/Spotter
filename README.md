@@ -12,11 +12,11 @@ The Today tab shows the next training day of your split, which you choose at the
 
 Tap the star on an exercise's page in the Library to make it a favorite; squat, bench press and deadlift start out as favorites. A favorite takes every slot of its movement in the training days and never rotates. A training day starts with a favorite when one fits it, and not with the one that started the last workout. The Library and Progress show your favorites first.
 
-Within a training day, Spotter plans each exercise by double progression. The reps rise to the top of the rep range, and then the weight goes up one step. Settings sets the rep range, target reps in reserve, rest and warm-up sets per category of exercise, and an exercise's page in the Library can set its own.
+Within a training day, Spotter plans each exercise by double progression. The reps rise to the top of the rep range in the first set, and then the weight goes up one step. Settings sets the rep range, target reps in reserve, rest and warm-up sets per category of exercise, and an exercise's page in the Library can set its own.
 
 | Category | Reps | Reps in reserve |
 | --- | --- | --- |
-| Barbell compounds | 5–8 | 1–2 |
+| Barbell compounds | 5–6 | 1–2 |
 | Other compounds | 8–12 | 0–1 |
 | Isolations | 10–20 | 0–1 |
 
