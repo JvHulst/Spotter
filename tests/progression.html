@@ -1,0 +1,240 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Progression tests</title>
+<pre id="out">running</pre>
+<script type="module">
+import { e1rm, planExercise, nextSetWeight, warmupSets, finisherSets, nextTemplateId } from "../js/progression.js";
+import { indexByExercise, sessionRecords, stalled, records, muscleShares, weeklyStats, cleanSession, setCount } from "../js/history.js";
+import { cleanProgram } from "../js/program.js";
+import { parseCsv, csvKind, weighIns, strongSessions, splitWeighted } from "../js/strong.js";
+import { encrypt, decrypt, deriveKey, stable } from "../js/sync.js";
+import { afterSet } from "../js/rest.js";
+import { carryDown, isUntouched } from "../js/carry.js";
+import { moveItem } from "../js/reorder.js";
+import { loadLibrary } from "../js/library.js";
+
+const results = [];
+const check = (name, actual, expected) => {
+  const ok = JSON.stringify(actual) === JSON.stringify(expected);
+  results.push(`${ok ? "PASS" : "FAIL"} ${name}${ok ? "" : `\n     expected ${JSON.stringify(expected)}\n     actual   ${JSON.stringify(actual)}`}`);
+};
+
+const today = new Date(2026, 9, 29);
+const daysAgo = (n) => new Date(today.getTime() - n * 86400000);
+const db = { load: "none", increment: 4, equipment: "dumbbell" };
+const target = { reps: [5, 8], rir: [1, 2] };
+const plan = (ex, sets, gap, nSets = 3, t = target) => planExercise({
+  ex, target: t, nSets, today, bodyweight: 90,
+  history: sets ? [{ date: daysAgo(gap), sets: sets.map(([kg, reps, rir]) => ({ kg, reps, rir })) }] : [],
+});
+const brief = (p) => ({ mode: p.mode, kg: p.sets.map((s) => s.kg), reps: p.sets.map((s) => s.reps) });
+
+check("e1rm", Math.round(e1rm(68, 8, 1) * 10) / 10, 88.4);
+check("up: all sets at top with RIR >= 1", brief(plan(db, [[68, 8, 1], [68, 8, 1], [68, 8, 2]], 5)),
+  { mode: "up", kg: [72, 72, 72], reps: [6, 6, 6] });
+check("up: Strong sets without RIR", plan(db, [[68, 8], [68, 8], [68, 8]], 5).mode, "up");
+check("reps: one more rep per set", brief(plan(db, [[68, 7, 1], [68, 7, 1], [68, 6, 1]], 5)),
+  { mode: "reps", kg: [68, 68, 68], reps: [8, 8, 7] });
+check("reps: top reached only at RIR 0", brief(plan(db, [[68, 8, 0], [68, 8, 0], [68, 8, 0]], 5)),
+  { mode: "reps", kg: [68, 68, 68], reps: [8, 8, 8] });
+check("reps: back-off sets are ignored", brief(plan(db, [[68, 7, 1], [68, 6, 1], [56, 10, 1]], 5)),
+  { mode: "reps", kg: [68, 68, 68], reps: [8, 7, 7] });
+check("down: below the rep range", brief(plan(db, [[68, 4, 0], [68, 4, 0], [68, 3, 0]], 5)),
+  { mode: "down", kg: [64, 64, 64], reps: [5, 5, 5] });
+check("return after 4 weeks: same weight, fewer reps", brief(plan(db, [[68, 8, 1], [68, 8, 1], [68, 8, 1]], 28)),
+  { mode: "return", kg: [68, 68, 68], reps: [6, 6, 6] });
+check("return after 10 months: 18% lighter", brief(plan(db, [[68, 8, 1], [68, 8, 1], [68, 8, 1]], 300)),
+  { mode: "return", kg: [56, 56, 56], reps: [8, 8, 8] });
+check("new exercise", brief(plan(db, null, 0)), { mode: "new", kg: [null, null, null], reps: [6, 6, 6] });
+
+const assisted = { load: "subtract", increment: 5, equipment: "machine" };
+check("assisted: less assistance when progressing", plan(assisted, [[30, 10, 2], [30, 10, 2]], 3, 2, { reps: [6, 10], rir: [1, 2] }).sets[0].kg, 25);
+const weighted = { load: "add", increment: 2.5, equipment: "bodyweight" };
+check("weighted: more added weight when progressing", plan(weighted, [[10, 10, 1], [10, 10, 1]], 3, 2, { reps: [6, 10], rir: [1, 2] }).sets[0].kg, 12.5);
+const calf = { load: "none", increment: 0, equipment: "bodyweight" };
+check("increment 0: reps beyond the range", brief(plan(calf, [[0, 20], [0, 20]], 3, 2, { reps: [12, 20], rir: [1, 2] })),
+  { mode: "reps", kg: [0, 0], reps: [21, 21] });
+
+const next = (kg, reps, rir, nextSet = { kg: 68, reps: 8 }) =>
+  nextSetWeight({ ex: db, target, done: { kg, reps, rir }, plannedReps: 8, next: nextSet, bodyweight: 90 });
+check("next set: on target keeps weight", next(68, 8, 1), 68);
+check("next set: inside the RIR range keeps weight", next(68, 8, 2), 68);
+check("next set: on target keeps a later set with fewer planned reps", next(68, 8, 1, { kg: 68, reps: 6 }), 68);
+check("next set: much easier adds one increment", next(68, 8, 4), 72);
+check("next set: far below target removes one increment", next(68, 6, 0), 64);
+check("next set: without RIR keeps weight", next(68, 8, null), 68);
+check("next set: without history may move several steps", next(40, 12, 5, { kg: null, reps: 8 }), 48);
+
+check("finisher: drop set 25% lighter, same reps", finisherSets("drop", 20, 12, db), [{ type: "drop", kg: 12, reps: 12, rir: 0 }]);
+check("finisher: myo-reps, three mini-sets of a third", finisherSets("myo", 16, 15, db).map((x) => x.reps), [5, 5, 5]);
+check("finisher sets do not steer the plan", brief(planExercise({ ex: db, target, nSets: 2, today, bodyweight: 90,
+  history: [{ date: daysAgo(5), sets: [{ kg: 68, reps: 8, rir: 1 }, { kg: 68, reps: 8, rir: 1 }, { kg: 68, reps: 3, rir: 0, type: "myo" }] }] })),
+  { mode: "up", kg: [72, 72], reps: [5, 5] });
+check("finisher sets count half for volume", setCount([{ kg: 1, reps: 1 }, { kg: 1, reps: 1, type: "drop" }, { kg: 1, reps: 1, type: "myo" }]), 2);
+check("warm-ups: dumbbell compound", warmupSets(68, db, "compound"), [{ kg: 32, reps: 8 }, { kg: 44, reps: 5 }, { kg: 56, reps: 3 }]);
+const bar = { load: "none", increment: 2.5, equipment: "barbell" };
+const kgs = (sets) => sets.map((s) => `${s.kg}x${s.reps}`).join(" ");
+check("warm-ups: light barbell, only the empty bar", kgs(warmupSets(30, bar, "compound")), "20x10");
+check("warm-ups: 75 kg adds plates only (10s, 10s, then 5 and 2.5)", kgs(warmupSets(75, bar, "compound")), "20x10 40x8 60x3");
+check("warm-ups: 100 kg", kgs(warmupSets(100, bar, "compound")), "20x10 60x5 80x3");
+check("warm-ups: 140 kg", kgs(warmupSets(140, bar, "compound")), "20x10 60x8 100x5 120x3");
+check("warm-ups: none for a barbell isolation exercise", warmupSets(40, bar, "isolation"), []);
+check("warm-ups: none for an isolation exercise", warmupSets(20, db, "isolation"), []);
+check("warm-ups: none for bodyweight", warmupSets(10, weighted, "compound"), []);
+
+const rotation = ["a", "b"];
+check("rotation: starts at the first day", nextTemplateId(rotation, [{ template: "push" }]), "a");
+check("rotation: alternates", nextTemplateId(rotation, [{ template: "a" }, { template: "push" }]), "b");
+check("rotation: wraps around", nextTemplateId(rotation, [{ template: "b" }]), "a");
+
+const index = indexByExercise([
+  { id: "1", start: "2025-01-01T10:00:00", exercises: [{ ex: "x", sets: [{ kg: 10, reps: 5, warmup: true }, { kg: 20, reps: 5 }] }] },
+  { id: "2", start: "2025-02-01T10:00:00", exercises: [{ ex: "y", sets: [{ kg: 30, reps: 5 }] }] },
+]);
+check("index: warm-ups are dropped", index.get("x")[0].sets, [{ kg: 20, reps: 5 }]);
+
+const session = (id, start, sets) => ({ id, start, exercises: [{ ex: "x", sets: sets.map(([kg, reps]) => ({ kg, reps, rir: 1 })) }] });
+const prs = sessionRecords([
+  session("a", "2026-01-01T10:00:00", [[60, 8], [60, 8]]),
+  session("b", "2026-01-08T10:00:00", [[62.5, 8], [62.5, 8]]),
+  session("c", "2026-01-15T10:00:00", [[60, 6]]),
+], () => db, 90);
+check("records: none in the first session", prs.has("a"), false);
+check("records: heavier session sets all three", prs.get("b").map((r) => r.kind), ["e1rm", "weight", "volume"]);
+check("records: a lighter session sets none", prs.has("c"), false);
+const rec = records([{ date: today, sets: [{ kg: 60, reps: 10 }, { kg: 70, reps: 5 }] }], db, 90);
+check("records: heaviest weight for at least 6 reps", rec.reps.get(6).value, 60);
+check("records: heaviest weight", rec.heaviest.value, 70);
+
+const series = (values) => values.map((e1rm, i) => ({ date: daysAgo(7 * (values.length - i)), e1rm }));
+check("stall: no new best in four sessions", stalled(series([100, 102, 104, 105, 104, 105, 103, 104])), true);
+check("stall: still improving", stalled(series([100, 102, 104, 105, 104, 105, 106, 104])), false);
+
+const lib = { exercises: new Map([["row", { muscle: "back", pattern: "row" }]]), patterns: new Map([["row", { secondary: [["biceps", 0.5], ["traps", 0.5]] }]]) };
+check("muscles: secondary muscles count half", muscleShares("row", lib), [["back", 1], ["biceps", 0.5], ["traps", 0.5]]);
+const weeks = weeklyStats([{ start: "2026-10-27T18:00:00", exercises: [{ ex: "row", sets: [{ kg: 50, reps: 10 }, { kg: 50, reps: 10 }] }] }], lib, today, 2);
+check("weeks: sets per muscle in the current week", Object.fromEntries(weeks[1].muscles), { back: 2, biceps: 1, traps: 1 });
+
+const csv = `Date,Workout Name,Duration,Exercise Name,Set Order,Weight,Reps,Distance,Seconds,RPE
+2026-10-08 15:09:45,"Push, heavy",1h 5m,"Bench Press (Barbell)",W,40.0,10.0,0,0.0,
+2026-10-08 15:09:45,"Push, heavy",1h 5m,"Bench Press (Barbell)",1,80.0,6.0,0,0.0,8
+2026-10-08 15:09:45,"Push, heavy",1h 5m,"Bench Press (Barbell)",F,80.0,5.0,0,0.0,
+2026-10-08 15:09:45,"Push, heavy",1h 5m,"Squat (Barbell)",1,20.0,10.0,0,0.0,
+2026-10-08 15:09:45,"Push, heavy",1h 5m,"Squat (Barbell)",2,100.0,5.0,0,0.0,
+2026-10-08 15:09:45,"Push, heavy",1h 5m,"Zercher Squat",1,60.0,8.0,0,0.0,
+2026-10-08 15:09:45,"Push, heavy",1h 5m,"Zercher Squat",D,40.0,8.0,0,0.0,`;
+const libraryForCsv = { exercises: new Map([
+  ["bench-press-barbell", { id: "bench-press-barbell", name: "Bench Press (Barbell)", load: "none", aliases: "" }],
+  ["squat-barbell", { id: "squat-barbell", name: "Squat (Barbell)", load: "none", aliases: "" }],
+]) };
+const imported = strongSessions(parseCsv(csv), libraryForCsv);
+const s0 = imported.sessions[0];
+check("strong: one session with id from its start", [imported.sessions.length, s0.id, s0.start, s0.name, s0.durationMin], [1, "strong-20261008T150945", "2026-10-08T15:09:45", "Push, heavy", 65]);
+check("strong: marked warm-up, RPE and failure set", s0.exercises[0].sets, [{ kg: 40, reps: 10, warmup: true }, { kg: 80, reps: 6, rir: 2 }, { kg: 80, reps: 5, rir: 0 }]);
+check("strong: unmarked ramp-up set becomes a warm-up", s0.exercises[1].sets.map((x) => Boolean(x.warmup)), [true, false]);
+check("strong: unknown names become new exercises", imported.extra.map((e) => e.id), ["custom-zercher-squat"]);
+check("strong: drop sets keep their type", s0.exercises[2].sets.map((x) => x.type ?? null), [null, "drop"]);
+check("csv kind: a Strong export is not read as weigh-ins", csvKind(parseCsv(csv)), "strong");
+check("csv kind: date and kg columns are weigh-ins", csvKind(parseCsv("date,kg\n2025-12-21,80.5")), "weights");
+check("csv kind: unknown columns", csvKind(parseCsv("a,b\n1,2")), null);
+check("weigh-ins: comma decimals, semicolons and timestamps", weighIns(parseCsv("Date;Weight\n2025-12-21 07:30:00;80,54\n21-12-2025;70")), { "2025-12-21": { kg: 80.5, at: 0 } });
+
+check("clean: a session id with markup is rejected", cleanSession({ id: '"><img src=x onerror=alert(1)>', start: "2026-01-01T10:00:00", exercises: [] }), null);
+const hostile = cleanSession({ id: "a", start: "2026-01-01T10:00:00", name: 7, durationMin: "<i>", exercises: [
+  { ex: 'x"><svg onload=alert(1)>', sets: [] }, { ex: "squat-barbell", sets: [{ kg: "<img>", reps: "8<script>", rir: "1" }] }] });
+check("clean: bad exercise ids are dropped and numbers converted", hostile.exercises, [{ ex: "squat-barbell", sets: [{ kg: 0, reps: 0, rir: 1 }] }]);
+check("clean: text fields get defaults", [hostile.name, hostile.durationMin], ["Workout", null]);
+const prog = cleanProgram({ version: 2, split: "ppl", custom: [{ id: "t-1", name: "<b>", slots: [{ id: "s1", ex: "dip", sets: 99 }, { id: "s2", ex: "<x>" }] }, { id: "<x>", slots: [] }],
+  extra: [{ id: "custom-a", name: "A", muscle: "<script>", load: "add" }], exercises: { "bench-press-barbell": { reps: [4, 6], rir: "x", increment: 2.5, restSec: "y" } } });
+check("clean: program templates keep only valid ids", prog.custom, [{ id: "t-1", name: "<b>", slots: [{ id: "s1", ex: "dip", sets: 10, superset: false, finisher: "" }] }]);
+check("clean: extra exercises get fixed fields", prog.extra[0].muscle + prog.extra[0].load, "othernone");
+check("clean: exercise settings keep only a valid step and rest", prog.exercises, { "bench-press-barbell": { increment: 2.5 } });
+
+const pullups = [{ exercises: [{ ex: "pull-up", sets: [{ kg: 0, reps: 8, warmup: true }, { kg: 10, reps: 6 }] }] },
+  { exercises: [{ ex: "pull-up", sets: [{ kg: 0, reps: 12 }] }] }];
+check("weighted: added weight makes a weighted pull-up", [splitWeighted(pullups).length, pullups.map((s) => s.exercises[0].ex)], [1, ["weighted-pull-up", "pull-up"]]);
+
+const key = await deriveKey("correct horse battery", new Uint8Array(16));
+const doc = stable({ b: [1, { d: 2, c: 3 }], a: "x" });
+check("sync: stable JSON sorts keys", doc, '{"a":"x","b":[1,{"c":3,"d":2}]}');
+check("sync: encrypt and decrypt", await decrypt(key, await encrypt(key, doc)), doc);
+const wrong = await deriveKey("wrong horse battery", new Uint8Array(16));
+check("sync: a wrong passphrase fails", await decrypt(wrong, await encrypt(key, doc)).then(() => "read", () => "rejected"), "rejected");
+
+// rest: the set to log next and the rest before it. Sets are written as letters: w warm-up,
+// s working set, d drop set; a capital letter is a set already logged.
+const sets = (spec) => [...spec].map((c) => ({ ...(c.toLowerCase() === "w" ? { warmup: true } : {}), ...(c.toLowerCase() === "d" ? { type: "drop" } : {}), done: c === c.toUpperCase() }));
+const entries = (...specs) => specs.map(([spec, superset = false], i) => ({ ex: "ab"[i] ?? "c", superset, sets: sets(spec) }));
+const rests = { warmup: 60, superset: 45, of: (id) => ({ a: 90, b: 120, c: 120 })[id] };
+const after = (list, e, s) => afterSet(list, e, s, rests);
+check("rest: next working set takes the exercise's rest", after(entries(["Sss"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 90 });
+check("rest: after the last warm-up, the working-set rest", after(entries(["WWs"]), 0, 1), { focus: { e: 0, s: 2 }, rest: 90 });
+check("rest: between warm-ups, the warm-up rest", after(entries(["Ww"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 60 });
+check("rest: after the last working set, the next exercise's warm-up rest", after(entries(["S"], ["ws"]), 0, 0), { focus: { e: 1, s: 0 }, rest: 60 });
+check("rest: after the last working set, the next exercise's working set takes this exercise's rest", after(entries(["S"], ["s"]), 0, 0), { focus: { e: 1, s: 0 }, rest: 90 });
+check("rest: nothing left", after(entries(["S"]), 0, 0), null);
+check("rest: a drop set follows at once", after(entries(["Sd"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 10 });
+check("superset: the first exercise hands over after the short rest", after(entries(["Ss", true], ["ss"]), 0, 0), { focus: { e: 1, s: 0 }, rest: 45 });
+check("superset: the second exercise hands back after the longer rest", after(entries(["Ss", true], ["Ss"]), 1, 0), { focus: { e: 0, s: 1 }, rest: 120 });
+check("superset: a drop set stays with its exercise", after(entries(["Sds", true], ["ss"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 10 });
+check("superset: after the drop set the other exercise follows", after(entries(["SDs", true], ["ss"]), 0, 1), { focus: { e: 1, s: 0 }, rest: 45 });
+check("superset: the other exercise's warm-ups come first, with the warm-up rest", after(entries(["Ss", true], ["wws"]), 0, 0), { focus: { e: 1, s: 0 }, rest: 60 });
+check("superset: a warm-up does not hand over", after(entries(["Ws", true], ["ws"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 90 });
+check("superset: an exhausted partner leaves the exercise to continue", after(entries(["Ss", true], ["S"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 90 });
+
+// carry: a typed value runs down the untouched working sets
+const four = () => Array.from({ length: 4 }, () => ({ kg: 80, planKg: 80, reps: 8, planReps: 8 }));
+const weights = (sets) => sets.map((x) => x.kg);
+{
+  const sets = four();
+  carryDown(sets, 0, "kg", 75);
+  check("carry: a typed weight reaches the later untouched sets", weights(sets), [75, 75, 75, 75]);
+  check("carry: the plan follows, the later sets stay untouched", [sets[1].planKg, isUntouched(sets[1], "kg"), isUntouched(sets[0], "kg")], [75, true, false]);
+}
+{
+  const sets = four();
+  carryDown(sets, 1, "kg", 70);
+  carryDown(sets, 0, "kg", 85);
+  check("carry: a typed set keeps its value", weights(sets), [85, 70, 85, 85]);
+}
+{
+  const sets = four();
+  sets[1].done = true;
+  carryDown(sets, 0, "kg", 90);
+  check("carry: a logged set keeps its value", weights(sets), [90, 80, 90, 90]);
+}
+{
+  const sets = four();
+  sets[2].type = "drop";
+  sets.unshift({ kg: 40, planKg: 40, reps: 8, planReps: 8, warmup: true });
+  carryDown(sets, 0, "kg", 30);
+  check("carry: a warm-up edit does not carry", weights(sets), [30, 80, 80, 80, 80]);
+  carryDown(sets, 1, "kg", 70);
+  check("carry: a typed value skips drop sets", weights(sets), [30, 70, 70, 80, 70]);
+}
+{
+  const sets = four();
+  carryDown(sets, 0, "reps", 6);
+  check("carry: reps carry the same way", sets.map((x) => x.reps), [6, 6, 6, 6]);
+  carryDown(sets, 0, "kg", null);
+  check("carry: an emptied field carries nothing", [sets[0].kg, sets[1].kg], [null, 80]);
+}
+
+const moved = (list, from, to) => (moveItem(list, from, to), list);
+check("moveItem: forward", moved([1, 2, 3, 4], 0, 2), [2, 3, 1, 4]);
+check("moveItem: backward", moved([1, 2, 3, 4], 3, 1), [1, 4, 2, 3]);
+check("moveItem: same place", moved([1, 2, 3], 1, 1), [1, 2, 3]);
+
+{
+  const library = await loadLibrary();
+  const missing = [...library.exercises.keys()].filter((id) => !library.cues.get(id)?.steps.length);
+  check("cues: every exercise has steps", missing, []);
+  const images = [...new Set([...library.cues.values()].flatMap((c) => c.images))];
+  const broken = [];
+  for (const p of images) if (!(await fetch(`../img/ex/${encodeURI(p)}`)).ok) broken.push(p);
+  check("cues: every image file exists", broken, []);
+}
+
+const failed = results.filter((r) => r.startsWith("FAIL")).length;((r) => r.startsWith("FAIL")).length;
+document.getElementById("out").textContent = `${failed ? "FAILED" : "ALL PASSED"} ${results.length - failed}/${results.length}\n` + results.join("\n");
+</script>

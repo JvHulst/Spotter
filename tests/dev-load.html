@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Load local data</title>
+<pre id="out">loading</pre>
+<script type="module">
+// Development helper: replaces the app data in this browser, optionally starts a workout and
+// logs sets, then opens the app.
+//   ?source=strong     import the Strong export ../../strong_workouts.csv (default)
+//   ?source=backup     store the program, body data and sessions of ../../spotter-import.json
+//                      as they are, as a phone that imported that file holds them
+//   &start=full-body-a start this training day
+//   &log=3             log this many sets with their planned values
+//   &goto=%23library   open this route instead of the workout
+import { kv, sessionStore, clearAll } from "../js/db.js";
+import { state, loadState, saveSessions } from "../js/state.js";
+import { parseCsv, strongSessions } from "../js/strong.js";
+import { startWorkout, logSet } from "../js/workout.js";
+
+const params = new URLSearchParams(location.search);
+await clearAll();
+if (params.get("source") === "backup") {
+  const doc = await (await fetch("../../spotter-import.json")).json();
+  await Promise.all([kv.set("program", doc.program), kv.set("body", doc.body), sessionStore.putMany(doc.sessions)]);
+  await loadState();
+} else {
+  await loadState();
+  const { sessions } = strongSessions(parseCsv(await (await fetch("../../strong_workouts.csv")).text()), state.library);
+  await saveSessions(sessions);
+}
+if (params.get("start")) {
+  await startWorkout(params.get("start"));
+  for (let i = 0; i < Number(params.get("log") ?? 0); i++) await logSet(state.active.focus.e, state.active.focus.s);
+}
+document.getElementById("out").textContent = `loaded ${state.sessions.length} sessions`;
+location.href = `../index.html${params.get("goto") ?? (params.get("start") ? "#workout" : "#today")}`;
+</script>

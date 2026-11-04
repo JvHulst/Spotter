@@ -1,0 +1,27 @@
+pattern,label,kind,group,secondary
+horizontal-press,Chest press,compound,chest-press,triceps|shoulders
+incline-press,Incline press,compound,chest-press,shoulders|triceps
+chest-fly,Chest fly,isolation,,
+dip,Dip,compound,chest-press,chest|triceps
+vertical-press,Shoulder press,compound,,triceps
+lateral-raise,Lateral raise,isolation,,
+front-raise,Front raise,isolation,,
+rear-delt,Rear delt,isolation,,
+shrug,Shrug,isolation,,
+vertical-pull,Vertical pull,compound,,biceps
+row,Row,compound,,biceps|traps
+straight-arm,Straight-arm pull,isolation,,
+squat,Squat,compound,quad-compound,glutes:1
+leg-press,Leg press,compound,quad-compound,glutes
+lunge,Lunge,compound,quad-compound,glutes:1
+leg-extension,Leg extension,isolation,,
+hinge,Hinge,compound,,glutes
+hip-thrust,Hip thrust,compound,,hamstrings
+hip-abduction,Hip abduction,isolation,,
+leg-curl,Leg curl,isolation,,
+calf-raise,Calf raise,isolation,,
+curl,Biceps curl,isolation,,
+triceps-extension,Triceps extension,isolation,,
+core,Core,isolation,,
+other,Other,isolation,,
+cardio,Cardio,isolation,,
