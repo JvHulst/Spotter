@@ -5,7 +5,7 @@
 <script type="module">
 import { e1rm, planExercise, nextSetWeight, warmupSets, finisherSets, nextTemplateId } from "../js/progression.js";
 import { indexByExercise, sessionRecords, stalled, records, muscleShares, weeklyStats, cleanSession, setCount } from "../js/history.js";
-import { cleanProgram, trainingValue, warmupFor } from "../js/program.js";
+import { cleanProgram, trainingValue, warmupFor, builtinDays, dayPlan, template } from "../js/program.js";
 import { state, cleanSettings, storedSettings } from "../js/state.js";
 import { parseCsv, csvKind, weighIns, strongSessions, splitWeighted } from "../js/strong.js";
 import { encrypt, decrypt, deriveKey, stable } from "../js/sync.js";
@@ -259,6 +259,20 @@ check("settings: an unknown sound falls back to the bell", cleanSettings({ sound
     [tv("squat-barbell", "rest"), tv("leg-press", "rest"), tv("romanian-deadlift-dumbbell", "rest"), tv("bench-press-barbell", "rest")],
     ["150 category", "150 category", "150 category", "120 default"]);
   check("training: isolations get no warm-ups by default", [warmupFor("lateral-raise-dumbbell"), warmupFor("squat-barbell")], [false, true]);
+}
+{
+  // Favorites in the built-in days, without any history.
+  Object.assign(state, { days: builtinDays(state.library), slotLast: new Map(), index: new Map(), usage: new Map(), sessions: [],
+    program: cleanProgram({ version: 3, favorites: ["romanian-deadlift-barbell", "squat-barbell", "bench-press-barbell"] }) });
+  const ids = (day) => dayPlan(template(day)).map((x) => x.id);
+  check("favorites: a favorite takes the slot of its movement and leads", ids("full-body-b")[0], "romanian-deadlift-barbell");
+  check("favorites: the first favorite that fits leads", ids("full-body-a").slice(0, 2), ["squat-barbell", "bench-press-barbell"]);
+  state.sessions = [{ exercises: [{ ex: "squat-barbell" }] }];
+  check("favorites: not the one that led the last workout", ids("full-body-a").slice(0, 2), ["bench-press-barbell", "squat-barbell"]);
+  state.program.favorites = [];
+  check("favorites: without any, a day keeps its own exercises and order", ids("full-body-b")[0], "deadlift-barbell");
+  check("favorites: a program without the field gets squat, bench press and deadlift", cleanProgram({ version: 3 }).favorites,
+    ["squat-barbell", "bench-press-barbell", "deadlift-barbell"]);
 }
 
 const toBase64 = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");

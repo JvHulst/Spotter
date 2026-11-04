@@ -11,7 +11,7 @@
 // of the user's own template shows neither (see adaptive in workout.js).
 
 import { state, exercise, bodyweight, setWeight, saveActive, saveProgram } from "../state.js";
-import { template, targetFor, alternativeSections, proposeChange, plainBodyweight, SET_TYPES, SET_TYPE_LABEL, bigThreeRecords } from "../program.js";
+import { template, targetFor, alternativeSections, proposeChange, plainBodyweight, SET_TYPES, SET_TYPE_LABEL } from "../program.js";
 import { muscleStats, muscleShares } from "../history.js";
 import { MUSCLES } from "../library.js";
 import { WEEKLY_SETS_GUIDE } from "./muscles.js";
@@ -104,9 +104,18 @@ function card(entry, e) {
 const inWorkout = () => state.active.exercises.map((x) => x.ex);
 const bodyweightOnly = () => state.active.exercises.length > 0 && state.active.exercises.every((x) => plainBodyweight(x.ex));
 
-/** A proposed change of exercise (see proposeChange) with Switch and Keep. A workout of plain
- *  bodyweight exercises counts as training at home. */
+/** The exercise this one replaced in a rotation (see dayPlan), with Undo, or else a change of
+ *  exercise that is due (see proposeChange) with Switch and Keep. A workout of plain bodyweight
+ *  exercises counts as training at home. */
 function changeHint(entry, e, slot) {
+  if (entry.rotated) {
+    const { from, why } = entry.rotated;
+    return `
+    <div class="proposal row">
+      <div class="grow small">Replaces <b>${esc(exercise(from).name)}</b>: ${esc(why[0].toLowerCase() + why.slice(1))}.</div>
+      <button class="btn small" data-action="unrotate" data-e="${e}">Undo</button>
+    </div>`;
+  }
   const change = adaptive() && proposeChange(entry.ex, slot, inWorkout(), { bodyweightOnly: bodyweightOnly() });
   if (!change) return "";
   return `
@@ -264,6 +273,14 @@ actions["ex-menu"] = async ({ e }) => {
   if (pick === "remove" && await ask("Remove this exercise from today's workout?", { ok: "Remove", danger: true })) return removeExercise(+e);
 };
 actions.alt = ({ e, id }) => swapTo(+e, id);
+/** Back to the exercise a rotation replaced, which then stays for the weeks that Keep gives. */
+actions.unrotate = async ({ e }) => {
+  const { from } = state.active.exercises[+e].rotated;
+  await swapTo(+e, from);
+  if (state.active.exercises[+e].ex !== from) return;
+  state.program.keep = { ...state.program.keep, [from]: Date.now() };
+  return saveProgram();
+};
 actions.keep = ({ e }) => {
   state.program.keep ??= {};
   state.program.keep[state.active.exercises[+e].ex] = Date.now();
@@ -304,7 +321,7 @@ actions.finish = async () => {
     return;
   }
   location.hash = `#done-${session.id}`;
-  if (bigThreeRecords(state.records.get(session.id) ?? []).length) confetti();
+  confetti();
 };
 actions.discard = async () => {
   if (!(await ask("Discard this workout? Logged sets are lost.", { ok: "Discard", danger: true }))) return;

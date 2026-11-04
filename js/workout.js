@@ -44,7 +44,7 @@ export async function startWorkout(templateId) {
   const t = templateId ? template(templateId) : null;
   state.active = {
     id: `app-${Date.now().toString(36)}`, start: localIso(new Date()), template: t?.id ?? null, name: t?.name ?? "Workout",
-    exercises: t ? dayPlan(t).map(({ slot, id }) => entryFor(id, slot)) : [],
+    exercises: t ? dayPlan(t).map(({ slot, id, rotated }) => ({ ...entryFor(id, slot), ...(rotated ? { rotated } : {}) })) : [],
     rest: null,
   };
   state.active.focus = firstOpen();

@@ -20,12 +20,23 @@ import { MUSCLES, MINOR_MUSCLES } from "./library.js";
 import { daysBetween } from "./progression.js";
 import { WEIGHTED } from "./strong.js";
 
-/** Squat, bench press and deadlift: the lifts trained for strength as well as size. */
-export const STRENGTH_LIFTS = new Set(["squat-barbell", "bench-press-barbell", "deadlift-barbell"]);
+/** The favorites until the user stars exercises of their own: squat, bench press and deadlift. */
+export const DEFAULT_FAVORITES = ["squat-barbell", "bench-press-barbell", "deadlift-barbell"];
 
-/** The records of a session (see sessionRecords) that are a new estimated one-rep max of squat,
- *  bench press or deadlift. */
-export const bigThreeRecords = (records) => records.filter((r) => r.kind === "e1rm" && STRENGTH_LIFTS.has(r.ex));
+/**
+ * The user's favorite exercises, in the order they were starred. A favorite takes the slot of a
+ * built-in day that has its movement pattern, a built-in day starts with a favorite when one
+ * fits it (see dayPlan), a favorite never rotates (see proposeChange), and Progress shows the
+ * favorites first.
+ */
+export const favorites = () => state.program?.favorites ?? DEFAULT_FAVORITES;
+
+/** Star or unstar an exercise. */
+export function toggleFavorite(id) {
+  const list = favorites();
+  state.program.favorites = list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+  return saveProgram();
+}
 
 /** The category of an exercise, which sets its training values (see CATEGORY_DEFAULTS in
  *  state.js): compounds with a barbell, other compounds (machines, cables, dumbbells, bodyweight),
@@ -84,7 +95,8 @@ const HOME = { id: "home", name: "Home", slots: [
   ["pull-up", 4], ["push-up", 4], ["dip", 3], ["inverted-row-bodyweight", 3], ["bulgarian-split-squat-bodyweight", 3],
 ].map(([ex, sets]) => ({ id: `home-${ex}`, ex, sets })) };
 
-export const defaultProgram = () => ({ version: 3, split: "full-body", custom: [structuredClone(HOME)], slots: {}, exercises: {}, extra: [], keep: {}, phases: [] });
+export const defaultProgram = () => ({ version: 3, split: "full-body", custom: [structuredClone(HOME)], slots: {}, exercises: {}, extra: [], keep: {},
+  favorites: [...DEFAULT_FAVORITES], phases: [] });
 
 /** Diet phases, each from its date until the next one. */
 export const PHASES = { maintain: "Maintain", bulk: "Bulk", cut: "Cut" };
@@ -148,6 +160,7 @@ export function cleanProgram(raw) {
     extra: (p.extra ?? []).filter((e) => ID.test(e?.id)).map((e) => ({ id: e.id, name: name(e.name), muscle: "other", pattern: "other",
       equipment: "other", load: "none", increment: Number.isFinite(e.increment) ? e.increment : 2.5, aliases: "" })),
     keep: Object.fromEntries(Object.entries(p.keep ?? {}).filter(([id, at]) => ID.test(id) && Number.isFinite(at))),
+    favorites: Array.isArray(p.favorites) ? [...new Set(p.favorites.filter((id) => ID.test(id)))].slice(0, 20) : [...DEFAULT_FAVORITES],
     ...(Array.isArray(p.tracked) ? { tracked: p.tracked.filter((id) => ID.test(id)).slice(0, 20) } : {}),
     phases: (Array.isArray(p.phases) ? p.phases : []).filter((x) => /^\d{4}-\d\d-\d\d$/.test(x?.date) && PHASES[x.phase])
       .map((x) => ({ date: x.date, phase: x.phase })),
@@ -196,19 +209,35 @@ export function slotOptions({ pattern: p, prefer = [] }) {
 }
 
 /**
- * The exercise of each slot of a training day. A built-in day is adaptive: a slot gets the
- * exercise last logged in it, with no exercise in two slots. A template of the user's own is
- * fixed: each slot is the exercise saved in it.
+ * The exercise of each slot of a training day, as {slot, id}, in the order of the workout. A
+ * template of the user's own is fixed: each slot is the exercise saved in it, in its order.
+ *
+ * A built-in day is adaptive. A slot gets a favorite of its movement pattern, the one last logged
+ * in it if there are several, else the exercise last logged in it, with no exercise in two
+ * slots. It then rotates to another exercise when a change is due (see proposeChange); such a
+ * slot also has `rotated`, {from, why}. The day starts with a favorite when one fits it, another
+ * one than the first exercise of the last workout when it can; a slot that pairs with a
+ * neighbor in a superset keeps its place.
  */
 export function dayPlan(t) {
   if (t.custom) return t.slots.map((slot) => ({ slot, id: slot.prefer[0] }));
   const taken = [];
-  return t.slots.map((slot) => {
-    const choice = slotChoice(slot);
+  const plan = t.slots.map((slot) => {
+    const fits = favorites().filter((id) => exercise(id)?.pattern === slot.pattern && !taken.includes(id));
+    const choice = fits.find((id) => id === state.slotLast.get(slot.id)) ?? fits[0] ?? slotChoice(slot);
     const id = taken.includes(choice) ? slotOptions(slot).find((x) => !taken.includes(x)) : choice;
     taken.push(id);
     return { slot, id };
   });
+  for (const p of plan) {
+    const change = proposeChange(p.id, p.slot, plan.map((x) => x.id));
+    if (change) Object.assign(p, { id: change.to, rotated: { from: p.id, why: change.why } });
+  }
+  const lastLead = state.sessions.at(-1)?.exercises[0]?.ex;
+  const leads = plan.filter((p, i) => favorites().includes(p.id) && !p.slot.superset && !plan[i - 1]?.slot.superset)
+    .sort((a, b) => favorites().indexOf(a.id) - favorites().indexOf(b.id));
+  const lead = leads.find((p) => p.id !== lastLead) ?? leads[0];
+  return lead ? [lead, ...plan.filter((p) => p !== lead)] : plan;
 }
 
 /**
@@ -256,28 +285,30 @@ function alternatives(ex, slot, exclude) {
 /** An exercise that needs no equipment and no added weight, for workouts at home. */
 export const plainBodyweight = (id) => exercise(id).equipment === "bodyweight" && !exercise(id).increment;
 
-/** Weeks on one exercise after which Spotter proposes another, and for which Keep silences it. */
+/** Weeks on one exercise after which Spotter rotates to another, and for which Keep or Undo silences that. */
 const ROTATE_WEEKS = 8;
 
 /**
- * A proposed change of exercise, as {to, why}, or null. A plain bodyweight exercise whose sets
- * all reached the top of the rep range moves on to its weighted variant, except in a workout of
- * bodyweight exercises only. Otherwise Spotter proposes a change when the exercise stalls, or
- * when an exercise other than squat, bench press and deadlift has run for ROTATE_WEEKS without a
- * break. The proposal is an alternative you know but have not done for ROTATE_WEEKS, of the same
- * pattern where possible, so that its plan starts from your own history.
+ * A change of exercise that is due, as {to, why}, or null; never for a favorite. A plain
+ * bodyweight exercise whose sets all reached the top of the rep range moves on to its weighted
+ * variant, except in a workout of bodyweight exercises only. Otherwise a change is due when the
+ * exercise stalls or has run for ROTATE_WEEKS without a break: planned variation every few weeks
+ * can add regional growth, while switching often can hold back gains (Kassiano et al. 2022,
+ * J. Strength Cond. Res. 36:1753). The new exercise is an alternative you know but have not done
+ * for ROTATE_WEEKS, of the same pattern where possible, so that its plan starts from your own
+ * history.
  */
 export function proposeChange(id, slot, exclude, { bodyweightOnly = false } = {}) {
   const today = new Date();
   const entries = state.index.get(id) ?? [];
-  if (!entries.length || today - (state.program.keep?.[id] ?? 0) < ROTATE_WEEKS * 7 * 86400000) return null;
+  if (!entries.length || favorites().includes(id) || today - (state.program.keep?.[id] ?? 0) < ROTATE_WEEKS * 7 * 86400000) return null;
   const twin = WEIGHTED[id];
   if (twin && !bodyweightOnly && !exclude.includes(twin) && entries.at(-1).sets.every((s) => s.reps >= targetFor(id).reps[1])) {
     return { to: twin, why: "Every set reached the top of the rep range, so add weight" };
   }
   const stall = stalled(exerciseSeries(entries, exercise(id), bodyweight()));
   const weeks = Math.floor(runWeeks(entries, today));
-  if (!stall && (STRENGTH_LIFTS.has(id) || weeks < ROTATE_WEEKS)) return null;
+  if (!stall && weeks < ROTATE_WEEKS) return null;
   const options = alternatives(id, slot, exclude).filter((x) => !bodyweightOnly || plainBodyweight(x));
   const rested = (x) => {
     const last = state.index.get(x)?.at(-1)?.date;
@@ -285,7 +316,7 @@ export function proposeChange(id, slot, exclude, { bodyweightOnly = false } = {}
   };
   const same = (x) => exercise(x).pattern === exercise(id).pattern;
   const to = options.find((x) => rested(x) && same(x)) ?? options.find(rested) ?? options.find(same) ?? options[0];
-  return to ? { to, why: stall ? "No new best in 4 workouts" : `${weeks} weeks on this exercise` } : null;
+  return to ? { to, why: stall ? "No new best in 4 workouts" : `${weeks} weeks in a row` } : null;
 }
 
 /** Finishers a slot can plan after its working sets. The built-in days put them on isolation

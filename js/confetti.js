@@ -1,5 +1,5 @@
-// A burst of confetti over the screen, for a new estimated one-rep max on squat, bench press or
-// deadlift. It draws on a canvas that ignores taps and removes itself after a few seconds.
+// A burst of confetti over the screen, for a finished workout. It draws on a canvas that ignores
+// taps and removes itself after a few seconds.
 
 const COLORS = ["#e8590c", "#2f6fe4", "#26883f", "#d93d42", "#f2c230", "#ffffff"];
 const DURATION_MS = 3200;

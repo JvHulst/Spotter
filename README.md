@@ -8,7 +8,9 @@ Open the link in Safari, tap Share, then tap Add to Home Screen. From then on, o
 
 ## Using Spotter
 
-The Today tab shows the next training day of your split, which you choose at the top of that tab. A training day is a list of exercise slots, such as a squat slot or a row slot. Each slot keeps the exercise you last chose for it, and Spotter proposes a swap when that exercise stalls. You can also build templates of your own, which keep exactly the exercises you saved in them.
+The Today tab shows the next training day of your split, which you choose at the top of that tab. A training day is a list of exercise slots, such as a squat slot or a row slot. Each slot keeps the exercise you last chose for it. Spotter rotates it to another exercise when it stalls or has run for 8 weeks, and the workout offers an Undo. You can also build templates of your own, which keep exactly the exercises you saved in them.
+
+Star an exercise on its Library page to make it a favorite; squat, bench press and deadlift start out as favorites. A favorite takes every slot of its movement in the training days and never rotates. A training day starts with a favorite when one fits it, and not with the one that started the last workout. Progress shows your favorites first.
 
 Within a training day, Spotter plans each exercise by double progression. The reps rise to the top of the rep range, and then the weight goes up one step. Settings sets the rep range, target reps in reserve, rest and warm-up sets per category of exercise, and an exercise's page in the Library can set its own.
 

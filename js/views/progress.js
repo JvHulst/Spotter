@@ -2,7 +2,7 @@
 // weekly volume and recent records.
 
 import { state, exercise, bodyweight, weighIns, setWeight, saveProgram } from "../state.js";
-import { STRENGTH_LIFTS } from "../program.js";
+import { favorites } from "../program.js";
 import { weeklyStats, exerciseSeries, weightTrend } from "../history.js";
 import { PHASES } from "../program.js";
 import { openSheet, closeSheet } from "./sheet.js";
@@ -72,12 +72,12 @@ export function progressView() {
   return { title: "Progress", tab: "progress", body };
 }
 
-/** The automatic choice of exercises to track: squat, bench press and deadlift when ever logged,
- *  then the most used exercises of the last half year, eight at most. */
+/** The automatic choice of exercises to track: the favorites when ever logged, then the most
+ *  used exercises of the last half year, eight at most. */
 function automaticTracked() {
   const used = [...state.usage.entries()].filter(([id, u]) => u.recent >= 3 && exercise(id)?.increment > 0)
     .sort((a, b) => b[1].recent - a[1].recent).map(([id]) => id);
-  return [...new Set([...[...STRENGTH_LIFTS].filter((id) => state.index.has(id)), ...used])].slice(0, 8);
+  return [...new Set([...favorites().filter((id) => state.index.has(id)), ...used])].slice(0, 8);
 }
 
 /** The exercises on the dashboard: the user's choice (`tracked` in the program), else the automatic one. */

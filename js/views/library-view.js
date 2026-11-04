@@ -2,7 +2,7 @@
 // targets and its recent sessions.
 
 import { state, exercise, pattern, bodyweight, saveProgram } from "../state.js";
-import { exerciseCategory, CATEGORY_LABEL } from "../program.js";
+import { exerciseCategory, CATEGORY_LABEL, favorites, toggleFavorite } from "../program.js";
 import { trainingRows } from "./training.js";
 import { exerciseSeries, records } from "../history.js";
 import { loadFor } from "../progression.js";
@@ -49,7 +49,12 @@ export function exerciseView(id) {
   const e = exercise(id);
   if (!e) return { title: "Exercise", back: "#library", body: `<div class="empty">Unknown exercise</div>` };
   const entries = state.index.get(id) ?? [];
-  const head = `<div class="small muted" style="text-transform:capitalize">${esc(e.muscle)} · ${esc(pattern(id).label)} · ${esc(e.equipment)}</div>${cuesCard(id)}`;
+  const favorite = favorites().includes(id);
+  const head = `
+    <div class="row" style="justify-content:space-between;gap:8px">
+      <div class="small muted" style="text-transform:capitalize">${esc(e.muscle)} · ${esc(pattern(id).label)} · ${esc(e.equipment)}</div>
+      <button class="chip small ${favorite ? "on" : ""}" data-action="favorite" data-id="${id}">${favorite ? "★ Favorite" : "☆ Favorite"}</button>
+    </div>${cuesCard(id)}`;
   const body = entries.length ? head + recordsCard(entries, e) + chartCard(entries, e) + repTable(entries, e) + targetsCard(id, e) + recentList(entries)
     : head + `<div class="empty">No sessions with this exercise yet</div>` + targetsCard(id, e);
   return { title: e.name, back: exerciseOrigin.back ?? "#library", body };
@@ -157,6 +162,7 @@ function recentList(entries) {
 
 
 actions["lib-muscle"] = ({ m }) => { state.ui.muscle = m; };
+actions.favorite = ({ id }) => toggleFavorite(id);
 actions["lib-search"] = (_, el) => {
   state.ui.libQuery = el.value;
   document.getElementById("lib-list").innerHTML = libraryList();

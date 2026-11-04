@@ -1,9 +1,9 @@
 // Settings: sync, import and backup, bodyweight, rest timer defaults and theme.
 
 import { state, saveSettings, saveProgram, saveSessions, addCustomExercises, reindex, cleanSettings, storedSettings, cleanDeleted,
-  cleanWeights, storeWeights, bodyweight, hooks, DEFAULT_SETTINGS } from "../state.js";
+  cleanWeights, storeWeights, bodyweight, hooks, exercise, DEFAULT_SETTINGS } from "../state.js";
 import { kv, backup, clearAll } from "../db.js";
-import { defaultProgram, cleanProgram, CATEGORY_LABEL } from "../program.js";
+import { defaultProgram, cleanProgram, CATEGORY_LABEL, favorites } from "../program.js";
 import { cleanSession } from "../history.js";
 import { parseCsv, csvKind, weighIns, strongSessions } from "../strong.js";
 import { connect, disconnect, sync, syncStatus } from "../sync.js";
@@ -55,6 +55,13 @@ export function settingsView() {
         <div class="small muted">${state.latestWeight ? `${fmtKg(bodyweight())} kg, weighed ${state.latestWeight.date}` : "No weigh-ins yet"}</div></div>
       <span class="small link-text">Weigh-ins ›</span>
     </a>
+    <section class="card">
+      <div class="eyebrow">Favorites</div>
+      <p class="small muted" style="margin:6px 0 10px">A favorite takes every slot of its movement in the training days and never rotates.
+        A training day starts with a favorite when one fits it. Star an exercise on its page in the Library.</p>
+      <div class="chips" style="flex-wrap:wrap">${favorites().filter((id) => exercise(id)).map((id) =>
+        `<a class="chip" href="#exercise-${id}">★ ${esc(exercise(id).name)}</a>`).join("") || `<span class="small muted">No favorites</span>`}</div>
+    </section>
     <section class="card">
       <div class="eyebrow">Training per category</div>
       <p class="small muted" style="margin:6px 0 2px">An exercise's page in the Library can set its own values.</p>

@@ -21,13 +21,13 @@ export function today() {
   const perWeek = sessionsWithin(state.sessions, new Date(), 28) / 4;
   const split = activeSplit();
 
-  const rows = dayPlan(t).map(({ slot, id }) => {
+  const rows = dayPlan(t).map(({ slot, id, rotated }) => {
     const plan = planFor(id, slot.sets);
     const first = plan.sets[0];
     const load = first.kg == null ? "choose" : `${fmtKg(first.kg)} kg`;
     return `
       <div class="plan-row">
-        <div class="grow"><div class="eyebrow">${esc(slot.name ?? exercise(id).muscle)}</div><div class="ellipsis">${esc(exercise(id).name)}</div></div>
+        <div class="grow"><div class="eyebrow">${esc(slot.name ?? exercise(id).muscle)}</div><div class="ellipsis">${esc(exercise(id).name)}</div>${rotated ? `<div class="small muted ellipsis">Replaces ${esc(exercise(rotated.from).name)}</div>` : ""}</div>
         <div class="target num">${load}<div class="small muted">${slot.sets} × ${first.reps}${slot.finisher ? ` + ${slot.finisher === "drop" ? "drop" : "myo"}` : ""}</div></div>
         <div>${modeBadge(plan.mode)}</div>
       </div>`;
