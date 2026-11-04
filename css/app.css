@@ -136,6 +136,11 @@ nav.tabs svg { width: 24px; height: 24px; }
 }
 .list > :first-child { border-top: 0; }
 .list .title { font-weight: 600; }
+/* The favorite star (see views/star.js). The one that toggles has padding that enlarges its tap target. */
+.star { color: var(--accent-text); font-weight: 400; line-height: 1; }
+.star.toggle { display: inline-block; padding: 6px; margin: -6px; font-size: 28px; cursor: pointer; }
+.star.toggle:not(.on) { color: var(--muted); }
+.name-row { gap: 4px; }
 .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .section-title { margin: 22px 4px 6px; }
 

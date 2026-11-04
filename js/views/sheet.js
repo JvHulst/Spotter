@@ -2,6 +2,7 @@
 
 import { state, exercise } from "../state.js";
 import { actions, esc, ago } from "../ui.js";
+import { starMark } from "./star.js";
 
 let current = null;
 
@@ -53,7 +54,7 @@ function row(e) {
   const last = state.index.get(e.id)?.at(-1)?.date;
   return `
     <button data-action="sheet-pick" data-id="${e.id}">
-      <div class="grow"><div class="title ellipsis">${esc(e.name)}</div>
+      <div class="grow"><div class="title ellipsis">${starMark(e.id)} ${esc(e.name)}</div>
         <div class="small muted">${esc(e.muscle)} · ${esc(e.equipment)}${last ? ` · ${ago(last)}` : ""}</div></div>
     </button>`;
 }

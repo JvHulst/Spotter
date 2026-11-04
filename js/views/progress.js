@@ -10,6 +10,7 @@ import { MUSCLES, MINOR_MUSCLES } from "../library.js";
 import { lineChart, weightChart, barChart, sparkline, heatmap, compact, rangeStart, rangeChips } from "../charts.js";
 import { actions, esc, fmtDate, fmtKg, plural, toast, icon, RECORD_LABEL } from "../ui.js";
 import { moveItem } from "../reorder.js";
+import { starMark } from "./star.js";
 import { localIso } from "../workout.js";
 
 const DAY_MS = 86400000;
@@ -96,7 +97,7 @@ function strengthSection(now) {
     const change = before ? Math.round((last.e1rm / before.e1rm - 1) * 100) : null;
     return `
       <button class="tile ${id === pick ? "on" : ""}" data-action="progress-ex" data-id="${id}">
-        <div class="small ellipsis tile-name">${esc(exercise(id).name)}</div>
+        <div class="small ellipsis tile-name">${starMark(id)} ${esc(exercise(id).name)}</div>
         <div class="row" style="gap:6px;align-items:baseline"><b class="tile-value">${fmtKg(Math.round(last.e1rm))}</b><span class="small muted">kg</span>
           ${change == null ? "" : `<span class="small ${change > 0 ? "mode-up" : change < 0 ? "mode-down" : "muted"}">${change > 0 ? "+" : ""}${change}% 3 mo</span>`}</div>
         ${sparkline(s.slice(-12).map((p) => p.e1rm))}
@@ -110,7 +111,7 @@ function strengthSection(now) {
       <div class="row"><div class="eyebrow grow">Estimated one-rep max</div><a class="small link-text" href="#tracked">Edit ›</a></div>
       <div class="tiles">${tiles}</div>
       <div class="row" style="margin-top:12px">
-        <b class="grow ellipsis">${esc(exercise(pick).name)}</b>
+        <b class="grow ellipsis">${starMark(pick)} ${esc(exercise(pick).name)}</b>
         <div class="chips">${rangeChips("progress-range", range)}</div>
       </div>
       ${lineChart(points, { from: from && points.length ? from : null })}
@@ -196,11 +197,11 @@ export function trackedView() {
   const list = chosenTracked();
   const own = Boolean(state.program.tracked);
   const body = `
-    <p class="small muted" style="margin:4px 4px 0">${own ? "Your choice of exercises for the dashboard." : "Chosen automatically: squat, bench press and deadlift, then the exercises you logged most in the last half year. Any change here makes it your own choice."}</p>
+    <p class="small muted" style="margin:4px 4px 0">${own ? "Your choice of exercises for the dashboard." : "Chosen automatically: your favorites, then the exercises you logged most in the last half year. Any change here makes it your own choice."}</p>
     <div class="list">${list.map((id, i) => `
       <div class="tpl-row"><div class="row">
         <button class="grip" data-drag=".tpl-row" data-drag-action="tracked-move" aria-label="Drag to reorder">${icon.grip}</button>
-        <span class="grow ellipsis tpl-name">${esc(exercise(id).name)}</span>
+        ${starMark(id)}<span class="grow ellipsis tpl-name">${esc(exercise(id).name)}</span>
         <button class="icon-btn" data-action="tracked-remove" data-i="${i}" aria-label="Remove">✕</button>
       </div></div>`).join("") || `<div class="empty">No exercises</div>`}</div>
     <button class="btn block primary" data-action="tracked-add">+ Add exercise</button>

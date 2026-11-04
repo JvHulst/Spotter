@@ -11,6 +11,7 @@ import { sessionsWithin } from "../history.js";
 import { actions, ask, choose, esc, fmtKg, since, modeBadge, icon } from "../ui.js";
 import { moveItem } from "../reorder.js";
 import { openSheet, closeSheet } from "./sheet.js";
+import { starMark } from "./star.js";
 
 export function today() {
   const suggested = suggestedTemplateId();
@@ -27,7 +28,7 @@ export function today() {
     const load = first.kg == null ? "choose" : `${fmtKg(first.kg)} kg`;
     return `
       <div class="plan-row">
-        <div class="grow"><div class="eyebrow">${esc(slot.name ?? exercise(id).muscle)}</div><div class="ellipsis">${esc(exercise(id).name)}</div>${rotated ? `<div class="small muted ellipsis">Replaces ${esc(exercise(rotated.from).name)}</div>` : ""}</div>
+        <div class="grow"><div class="eyebrow">${esc(slot.name ?? exercise(id).muscle)}</div><div class="ellipsis">${starMark(id)} ${esc(exercise(id).name)}</div>${rotated ? `<div class="small muted ellipsis">Replaces ${esc(exercise(rotated.from).name)}</div>` : ""}</div>
         <div class="target num">${load}<div class="small muted">${slot.sets} × ${first.reps}${slot.finisher ? ` + ${slot.finisher === "drop" ? "drop" : "myo"}` : ""}</div></div>
         <div>${modeBadge(plan.mode)}</div>
       </div>`;
@@ -130,6 +131,7 @@ export function templateView(id) {
     <div class="tpl-row">
       <div class="row">
         <button class="grip" data-drag=".tpl-row" data-drag-action="tpl-move" data-id="${id}" aria-label="Drag to reorder">${icon.grip}</button>
+        ${starMark(slot.ex)}
         <button class="grow ellipsis tpl-name" data-action="tpl-swap" data-id="${id}" data-i="${i}">${esc(exercise(slot.ex)?.name ?? slot.ex)}</button>
         <button class="icon-btn" data-action="tpl-remove" data-id="${id}" data-i="${i}" aria-label="Remove">✕</button>
       </div>

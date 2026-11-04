@@ -11,7 +11,7 @@
 // of the user's own template shows neither (see adaptive in workout.js).
 
 import { state, exercise, bodyweight, setWeight, saveActive, saveProgram } from "../state.js";
-import { template, targetFor, alternativeSections, proposeChange, plainBodyweight, SET_TYPES, SET_TYPE_LABEL } from "../program.js";
+import { template, targetFor, alternativeSections, proposeChange, plainBodyweight, favorites, SET_TYPES, SET_TYPE_LABEL } from "../program.js";
 import { muscleStats, muscleShares } from "../history.js";
 import { MUSCLES } from "../library.js";
 import { WEEKLY_SETS_GUIDE } from "./muscles.js";
@@ -22,6 +22,7 @@ import { actions, ask, choose, dropdown, esc, fmtKg, ago, since, setsText, icon,
 import { openSheet, closeSheet } from "./sheet.js";
 import { confetti } from "../confetti.js";
 import { exerciseOrigin } from "./library-view.js";
+import { starMark } from "./star.js";
 
 const today = () => localIso(new Date()).slice(0, 10);
 
@@ -90,7 +91,7 @@ function card(entry, e) {
           <div class="eyebrow grow">${esc(slot?.name ?? ex.muscle)} · ${work} sets · ${target.reps.join("–")} reps @ RIR ${target.rir.join("–")}</div>
           <button class="icon-btn" data-action="ex-menu" data-e="${e}" aria-label="Exercise options">${icon.more}</button>
         </div>
-        <button class="name" data-action="alts" data-e="${e}">${esc(ex.name)} ${icon.down}</button>
+        <div class="row name-row">${starMark(entry.ex)}<button class="name" data-action="alts" data-e="${e}">${esc(ex.name)} ${icon.down}</button></div>
         <div class="last">${last ? `${ago(last.date)}: ${esc(setsText(last.sets))}` : "No history yet"}</div>
         <div class="reason mode-${entry.plan.mode}">${esc(entry.plan.reason)}</div>
         ${changeHint(entry, e, slot)}
@@ -233,7 +234,7 @@ actions.alts = async ({ e }, el) => {
   const change = adaptive() && proposeChange(entry.ex, slot, inWorkout(), { bodyweightOnly: bodyweightOnly() });
   const item = (id) => {
     const last = state.index.get(id)?.at(-1)?.date;
-    return { key: id, label: exercise(id).name, sub: `${exercise(id).equipment}${last ? ` · last ${since(last)} ago` : " · new to you"}` };
+    return { key: id, label: `${favorites().includes(id) ? "★ " : ""}${exercise(id).name}`, sub: `${exercise(id).equipment}${last ? ` · last ${since(last)} ago` : " · new to you"}` };
   };
   const sections = [
     ...(change ? [["Suggested", [{ ...item(change.to), sub: change.why, accent: true }]]] : []),

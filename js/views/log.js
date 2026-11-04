@@ -6,6 +6,7 @@ import { working, volumeOf, bestSet, setCount, setE1rm, sessionBest } from "../h
 import { actions, ask, choose, esc, fmtDate, fmtKg, plural, ordinal, toast, RECORD_LABEL } from "../ui.js";
 import { SET_TYPES, SET_TYPE_LABEL } from "../program.js";
 import { openSheet, closeSheet } from "./sheet.js";
+import { starMark } from "./star.js";
 
 const PAGE = 30;
 /** "W", "D" or "M" for warm-ups, drop sets and myo-reps mini-sets; working sets are numbered. */
@@ -37,7 +38,7 @@ export function historyView() {
       const ex = exercise(e.ex);
       const work = working(e.sets);
       const extra = work.some((x) => x.type === "drop") ? " + drop" : work.some((x) => x.type === "myo") ? " + myo" : "";
-      return `<div class="hist-line"><span class="ellipsis">${work.filter((x) => !x.type).length} × ${esc(ex?.name ?? e.ex)}${extra}</span>
+      return `<div class="hist-line"><span class="ellipsis">${work.filter((x) => !x.type).length} × ${starMark(e.ex)} ${esc(ex?.name ?? e.ex)}${extra}</span>
         <span class="num muted">${esc(setText(ex && bestSet(work, ex, bodyweight()), ex))}</span></div>`;
     }).join("");
     parts.push(`
@@ -142,7 +143,7 @@ function editCard(e, i) {
       ${field(s, "kg", x.kg)}<span class="muted">kg ×</span>${field(s, "reps", x.reps)}<span class="muted">RIR</span>${field(s, "rir", x.rir)}
       <button class="icon-btn" data-action="s-del-set" data-e="${i}" data-s="${s}" aria-label="Remove set">✕</button>
     </div>`).join("");
-  return `<section class="ex-card"><div class="ex-head"><div class="name">${esc(exercise(e.ex)?.name ?? e.ex)}</div></div>
+  return `<section class="ex-card"><div class="ex-head"><div class="name">${starMark(e.ex)}${esc(exercise(e.ex)?.name ?? e.ex)}</div></div>
     ${rows}
     <div class="ex-foot"><button class="btn small" data-action="s-add-set" data-e="${i}">+ Set</button><span class="grow"></span>
       <button class="btn small" data-action="s-del-ex" data-e="${i}">Remove</button></div></section>`;

@@ -58,7 +58,7 @@ export function settingsView() {
     <section class="card">
       <div class="eyebrow">Favorites</div>
       <p class="small muted" style="margin:6px 0 10px">A favorite takes every slot of its movement in the training days and never rotates.
-        A training day starts with a favorite when one fits it. Star an exercise on its page in the Library.</p>
+        A training day starts with a favorite when one fits it. Tap the star on an exercise's page in the Library to add or remove it.</p>
       <div class="chips" style="flex-wrap:wrap">${favorites().filter((id) => exercise(id)).map((id) =>
         `<a class="chip" href="#exercise-${id}">★ ${esc(exercise(id).name)}</a>`).join("") || `<span class="small muted">No favorites</span>`}</div>
     </section>
@@ -69,7 +69,7 @@ export function settingsView() {
     </section>
     <section class="card">
       <div class="eyebrow">Rest timer</div>
-      ${rest("restSquatHinge", "Squats and deadlifts")}${rest("restSuperset", "Superset")}${rest("restWarmup", "After a warm-up set")}
+      ${rest("restSquatHinge", "Squats and deadlifts")}${rest("restSuperset", "Superset")}${rest("restWarmup", "Between warm-up sets")}
       <div class="small muted" style="margin:10px 0 6px">Sound when the rest ends</div>
       <div class="chips" style="flex-wrap:wrap">${Object.entries(SOUND_CHOICES).map(([id, label]) =>
         `<button class="chip ${(s.sound ?? DEFAULT_SOUND) === id ? "on" : ""}" data-action="sound" data-id="${id}">${label}</button>`).join("")}</div>

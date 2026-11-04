@@ -15,15 +15,17 @@ export function ago(date, now = new Date()) {
   if (days === 1) return "yesterday";
   if (days < 14) return `${days} days ago`;
   if (days < 60) return `${Math.round(days / 7)} weeks ago`;
-  return `${Math.round(days / 30.4)} months ago`;
+  if (days < 730) return `${Math.round(days / 30.4)} months ago`;
+  return `${Math.round(days / 365.25)} years ago`;
 }
 
-/** Short form of the time since a date, such as "3 d", "5 wk" or "10 mo". */
+/** Short form of the time since a date, such as "3 d", "5 wk", "10 mo" or "2 yr". */
 export function since(date, now = new Date()) {
   const days = Math.round((now - date) / 86400000);
   if (days < 14) return `${Math.max(0, days)} d`;
   if (days < 60) return `${Math.round(days / 7)} wk`;
-  return `${Math.round(days / 30.4)} mo`;
+  if (days < 730) return `${Math.round(days / 30.4)} mo`;
+  return `${Math.round(days / 365.25)} yr`;
 }
 
 export const fmtDate = (d, opts = { weekday: "short", day: "numeric", month: "short" }) => d.toLocaleDateString(undefined, opts);
