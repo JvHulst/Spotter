@@ -27,12 +27,10 @@ export function musclesView() {
       </div>`;
   };
   const body = `
-    <p class="small muted" style="margin:4px 4px 0">Working sets in the last 7 days per muscle. A set counts fully for the
-    exercise's main muscle and half for the muscles it trains indirectly, such as the biceps in a row or the glutes in a squat.
-    The bar is full at ${WEEKLY_SETS_GUIDE} sets per week. Recovering means trained in the last day, due means not trained for a week or more.</p>
+    <p class="small muted" style="margin:4px 4px 0">Working sets in the last 7 days. Indirect work, such as the biceps in a row,
+    counts half. The bar fills at ${WEEKLY_SETS_GUIDE} sets.</p>
     <div class="muscles">${MUSCLES.map((m) => tile(m, false)).join("")}</div>
     <div class="eyebrow section-title">Optional</div>
-    <p class="small muted" style="margin:0 4px">Compound lifts train these only a little. Direct sets add size if you want it.</p>
     <div class="muscles">${MINOR_MUSCLES.map((m) => tile(m, true)).join("")}</div>`;
   return { title: "Muscles", tab: "muscles", body };
 }

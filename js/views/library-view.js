@@ -9,7 +9,7 @@ import { exerciseSeries, records } from "../history.js";
 import { loadFor } from "../progression.js";
 import { MUSCLES, MINOR_MUSCLES } from "../library.js";
 import { lineChart, compact, rangeStart, rangeChips } from "../charts.js";
-import { actions, esc, ago, fmtDate, fmtKg, setsText } from "../ui.js";
+import { actions, esc, ago, cap, fmtDate, fmtKg, setsText } from "../ui.js";
 
 const METRICS = { e1rm: "Est. 1RM", top: "Heaviest", volume: "Volume" };
 
@@ -47,7 +47,7 @@ function libraryRow({ e, entries }) {
   return `
     <a href="#exercise-${e.id}">
       <div class="grow"><div class="title ellipsis">${starMark(e.id)} ${esc(e.name)}</div>
-        <div class="small muted">${esc(e.muscle)} · ${esc(e.equipment)}${last ? ` · ${ago(last.date)}` : ""}</div></div>
+        <div class="small muted">${esc(cap(e.muscle))} · ${esc(e.equipment)}${last ? ` · ${ago(last.date)}` : ""}</div></div>
       ${est ? `<div class="num" style="text-align:right"><b>${fmtKg(Math.round(est))} kg</b><div class="small muted">Est. 1RM</div></div>` : ""}
     </a>`;
 }
@@ -58,7 +58,7 @@ export function exerciseView(id) {
   const entries = state.index.get(id) ?? [];
   const head = `
     <div class="row" style="justify-content:space-between;gap:8px">
-      <div class="small muted" style="text-transform:capitalize">${esc(e.muscle)} · ${esc(pattern(id).label)} · ${esc(e.equipment)}</div>
+      <div class="small muted">${esc(cap(e.muscle))} · ${esc(pattern(id).label.toLowerCase())} · ${esc(e.equipment)}</div>
       ${star(id)}
     </div>${cuesCard(id)}`;
   const body = entries.length ? head + recordsCard(entries, e) + chartCard(entries, e) + repTable(entries, e) + targetsCard(id, e) + recentList(entries)

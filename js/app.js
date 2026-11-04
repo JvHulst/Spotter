@@ -50,7 +50,8 @@ export function render() {
   document.querySelector(".tip")?.remove();
   root.classList.toggle("has-mini", minimized);
   root.innerHTML = `
-    <header class="top">
+    <header class="top ${workout ? "swipe-down" : ""}">
+      ${workout ? `<div class="grabber" aria-hidden="true"></div>` : ""}
       ${view.back ? `<a class="back" href="${view.back}">‹ Back</a>` : ""}
       <h1 class="ellipsis">${esc(view.title)}</h1>${view.right ?? (view.tab ? settingsLink() : "")}
     </header>
@@ -64,7 +65,7 @@ export function render() {
 
 /** The bar above the tabs that stands in for a workout in progress while the user browses. */
 const miniBar = () => `
-  <a class="mini" href="#workout">
+  <a class="mini" href="#workout" draggable="false">
     <div class="grow">
       <b class="ellipsis">${esc(state.active.name)}</b>
       <div class="small muted num"><span id="mini-elapsed"></span><span id="mini-rest"></span></div>
@@ -91,6 +92,20 @@ document.addEventListener("pointerdown", (event) => {
     Object.assign(grip.dataset, { from, to });
     return dispatch(grip.dataset.dragAction, grip, event);
   });
+});
+
+// A swipe down on the header of a workout minimizes it, and a swipe up on the mini bar brings it
+// back. Both have touch-action: none in the stylesheet, so the swipe does not scroll the page.
+let pull = null;
+document.addEventListener("pointerdown", (event) => {
+  const zone = event.target.closest("header.swipe-down, .mini");
+  pull = zone && { down: zone.matches("header"), x: event.clientX, y: event.clientY };
+});
+document.addEventListener("pointerup", (event) => {
+  if (!pull) return;
+  const dx = Math.abs(event.clientX - pull.x), dy = event.clientY - pull.y;
+  if (dx < 60 && (pull.down ? dy > 50 : dy < -30)) location.hash = pull.down ? "#today" : "#workout";
+  pull = null;
 });
 
 document.addEventListener("click", (event) => {

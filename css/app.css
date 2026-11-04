@@ -66,7 +66,8 @@ body {
 }
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; border: 0; background: none; padding: 0; }
-.num { font-variant-numeric: tabular-nums; }
+/* Digits of equal width everywhere, so numbers do not shift their neighbors when they change. */
+body, .num { font-variant-numeric: tabular-nums; }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
 
@@ -79,6 +80,8 @@ header.top {
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   display: flex; align-items: center; gap: 12px;
 }
+header.swipe-down, .mini { touch-action: none; -webkit-user-drag: none; }
+.grabber { position: absolute; top: calc(env(safe-area-inset-top) + 4px); left: 50%; width: 36px; height: 5px; margin-left: -18px; border-radius: 3px; background: var(--line); }
 header.top h1 { font-size: 22px; margin: 0; flex: 1; letter-spacing: -0.01em; }
 header.top .back { font-size: 17px; color: var(--accent-text); padding: 8px 8px 8px 0; text-decoration: none; white-space: nowrap; }
 main { padding: 4px 16px calc(var(--tabbar) + env(safe-area-inset-bottom) + 24px); }
@@ -99,7 +102,9 @@ main.workout { padding-bottom: calc(env(safe-area-inset-bottom) + 120px); }
 .reordering .link-btn, .reordering .ex-card > :not(.ex-head), .reordering .ex-head > :not(:first-child) { display: none; }
 .reordering .ex-card { margin-bottom: 8px; }
 .reordering .tpl-opts { display: none; }
-.reordering .dragging { background: var(--surface-2); outline: 2px solid var(--accent); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); }
+.reordering .dragging { z-index: 40; pointer-events: none; background: var(--surface-2); outline: 2px solid var(--accent);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45); transform: scale(1.03); }
+.drop-gap { box-sizing: border-box; border: 2px dashed color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 14px; }
 
 nav.tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;

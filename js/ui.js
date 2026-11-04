@@ -28,6 +28,9 @@ export function since(date, now = new Date()) {
   return `${Math.round(days / 365.25)} yr`;
 }
 
+/** The text with its first letter capitalized, for lines that start with a lowercase name. */
+export const cap = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
 export const fmtDate = (d, opts = { weekday: "short", day: "numeric", month: "short" }) => d.toLocaleDateString(undefined, opts);
 export const fmtClock = (s) => `${s < 0 ? "+" : ""}${Math.floor(Math.abs(s) / 60)}:${String(Math.floor(Math.abs(s) % 60)).padStart(2, "0")}`;
 

@@ -1,7 +1,7 @@
 // A bottom sheet for picking an exercise, used for swaps and for adding exercises.
 
 import { state, exercise } from "../state.js";
-import { actions, esc, ago } from "../ui.js";
+import { actions, esc, ago, cap } from "../ui.js";
 import { starMark } from "./star.js";
 
 let current = null;
@@ -55,7 +55,7 @@ function row(e) {
   return `
     <button data-action="sheet-pick" data-id="${e.id}">
       <div class="grow"><div class="title ellipsis">${starMark(e.id)} ${esc(e.name)}</div>
-        <div class="small muted">${esc(e.muscle)} · ${esc(e.equipment)}${last ? ` · ${ago(last)}` : ""}</div></div>
+        <div class="small muted">${esc(cap(e.muscle))} · ${esc(e.equipment)}${last ? ` · ${ago(last)}` : ""}</div></div>
     </button>`;
 }
 

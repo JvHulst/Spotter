@@ -18,7 +18,7 @@ import { WEEKLY_SETS_GUIDE } from "./muscles.js";
 import { logSet, undoSet, editSet, setEdited, setType, setWarmups, addSet, removeSet, removeExercise, swapExercise, addExercise, toggleSuperset,
   moveExercise, saveAsTemplate, updateTemplate, finishWorkout, discardWorkout, localIso, adaptive } from "../workout.js";
 import { isUntouched } from "../carry.js";
-import { actions, ask, choose, dropdown, esc, fmtKg, ago, since, setsText, icon, toast } from "../ui.js";
+import { actions, ask, cap, choose, dropdown, esc, fmtKg, ago, since, setsText, icon, toast } from "../ui.js";
 import { openSheet, closeSheet } from "./sheet.js";
 import { confetti } from "../confetti.js";
 import { exerciseOrigin } from "./library-view.js";
@@ -234,7 +234,7 @@ actions.alts = async ({ e }, el) => {
   const change = adaptive() && proposeChange(entry.ex, slot, inWorkout(), { bodyweightOnly: bodyweightOnly() });
   const item = (id) => {
     const last = state.index.get(id)?.at(-1)?.date;
-    return { key: id, label: `${favorites().includes(id) ? "★ " : ""}${exercise(id).name}`, sub: `${exercise(id).equipment}${last ? ` · last ${since(last)} ago` : " · new to you"}` };
+    return { key: id, label: `${favorites().includes(id) ? "★ " : ""}${exercise(id).name}`, sub: `${cap(exercise(id).equipment)}${last ? ` · last ${since(last)} ago` : " · new to you"}` };
   };
   const sections = [
     ...(change ? [["Suggested", [{ ...item(change.to), sub: change.why, accent: true }]]] : []),

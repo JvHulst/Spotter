@@ -66,10 +66,17 @@ export function settingsView() {
       <div class="eyebrow">Training per category</div>
       <p class="small muted" style="margin:6px 0 2px">An exercise's page in the Library can set its own values.</p>
       ${Object.keys(s.categories).map((c) => `<div class="tv-group"><b>${CATEGORY_LABEL[c]}</b>${trainingRows("category", c)}</div>`).join("")}
+      <div class="tv-group"><b>Squats, deadlifts and leg press</b>
+        <div class="tv-row">
+          <div class="grow">Rest${s.restSquatHinge !== DEFAULT_SETTINGS.restSquatHinge ? `<button class="tv-reset" data-action="rest-reset" data-key="restSquatHinge">Custom · Reset</button>` : ""}</div>
+          <div class="mini-stepper"><button data-action="rest-step" data-key="restSquatHinge" data-d="-1" aria-label="Lower">−</button><span class="num">${fmtClock(s.restSquatHinge)}</span><button data-action="rest-step" data-key="restSquatHinge" data-d="1" aria-label="Raise">+</button></div>
+        </div>
+        <p class="small muted" style="margin:2px 0 0">This rest replaces the category's rest for these lifts, unless an exercise sets its own.</p>
+      </div>
     </section>
     <section class="card">
       <div class="eyebrow">Rest timer</div>
-      ${rest("restSquatHinge", "Squats and deadlifts")}${rest("restSuperset", "Superset")}${rest("restWarmup", "Between warm-up sets")}
+      ${rest("restSuperset", "Superset")}${rest("restWarmup", "Between warm-up sets")}
       <div class="small muted" style="margin:10px 0 6px">Sound when the rest ends</div>
       <div class="chips" style="flex-wrap:wrap">${Object.entries(SOUND_CHOICES).map(([id, label]) =>
         `<button class="chip ${(s.sound ?? DEFAULT_SOUND) === id ? "on" : ""}" data-action="sound" data-id="${id}">${label}</button>`).join("")}</div>
