@@ -1,16 +1,18 @@
 """Deploy push/worker.js to Cloudflare as the Worker "spotter-push" and point the app to it.
 
-Needs a Cloudflare API token with the one permission Account · Workers Scripts · Edit. The script
-asks for it and does not store it. Run from the repository root, also after changing worker.js:
+Needs a Cloudflare API token with the one permission Account · Workers Scripts · Edit. Copy the
+token, then run this from the repository root, also after changing worker.js:
 
     python push/deploy.py
+
+The script reads the token from the clipboard, empties the clipboard and does not store the token.
 
 It prints the Worker's address and writes it into PUSH_SERVER in js/push.js and the
 Content-Security-Policy of index.html, so that the app may connect to it.
 """
-import getpass
 import json
 import re
+import tkinter
 import urllib.error
 import urllib.request
 import uuid
@@ -42,8 +44,27 @@ def multipart(parts):
     return body + f"--{boundary}--\r\n".encode(), boundary
 
 
+def clipboard_token():
+    """The API token on the clipboard, which is then emptied. Reading the clipboard works in every
+    terminal, unlike a hidden prompt, which some Windows terminals do not pass keys to."""
+    tk = tkinter.Tk()
+    tk.withdraw()
+    try:
+        text = tk.clipboard_get().strip()
+    except tkinter.TclError:
+        text = ""
+    found = re.fullmatch(r"[\w-]{30,}", text)
+    if found:
+        tk.clipboard_clear()
+        tk.update()
+    tk.destroy()
+    if not found:
+        raise SystemExit("The clipboard holds no API token. Copy the token in Cloudflare, then run this again.")
+    return text
+
+
 def main():
-    token = getpass.getpass("Cloudflare API token (input hidden): ").strip()
+    token = clipboard_token()
     accounts = call(token, "GET", "/accounts")
     if len(accounts) == 1:
         account = accounts[0]["id"]
