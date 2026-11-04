@@ -255,8 +255,9 @@ check("settings: an unknown sound falls back to the bell", cleanSettings({ sound
   check("training: the exercise's own value comes first", tv("lateral-raise-dumbbell", "rest"), "60 exercise");
   check("training: then the user's value for the category", tv("lateral-raise-dumbbell", "rir"), "[1,2] category");
   check("training: then the default of the category", tv("squat-barbell", "reps"), "[5,8] default");
-  check("training: squat and deadlift variations rest longer", [tv("squat-barbell", "rest"), tv("romanian-deadlift-dumbbell", "rest"), tv("bench-press-barbell", "rest")],
-    ["150 category", "150 category", "120 default"]);
+  check("training: squat and deadlift variations and leg press rest longer",
+    [tv("squat-barbell", "rest"), tv("leg-press", "rest"), tv("romanian-deadlift-dumbbell", "rest"), tv("bench-press-barbell", "rest")],
+    ["150 category", "150 category", "150 category", "120 default"]);
   check("training: isolations get no warm-ups by default", [warmupFor("lateral-raise-dumbbell"), warmupFor("squat-barbell")], [false, true]);
 }
 

@@ -37,8 +37,9 @@ export function exerciseCategory(id) {
 }
 export const CATEGORY_LABEL = { heavy: "Barbell compounds", compound: "Other compounds", isolation: "Isolations" };
 
-/** Movement patterns of squat and deadlift variations, which rest settings.restSquatHinge. */
-const SQUAT_HINGE = new Set(["squat", "hinge"]);
+/** Movement patterns of squat and deadlift variations, leg press included, which rest
+ *  settings.restSquatHinge. */
+const SQUAT_HINGE = new Set(["squat", "leg-press", "hinge"]);
 
 /**
  * A training value of an exercise ("reps", "rir", "rest" or "warmup", see CATEGORY_DEFAULTS) and
