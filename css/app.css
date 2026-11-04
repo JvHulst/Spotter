@@ -155,6 +155,7 @@ nav.tabs svg { width: 24px; height: 24px; }
   font-size: 14px; font-weight: 600; color: var(--text);
 }
 .chip.on { background: var(--text); color: var(--bg); }
+.chip:disabled { opacity: 0.4; }
 /* An accent choice is filled with its color (--swatch); the chosen one is white with a ring. */
 .chip.swatch { background: var(--swatch); color: #fff; box-shadow: 0 0 0 2px transparent; }
 .chip.swatch.on { background: #fff; color: var(--swatch); box-shadow: 0 0 0 2px var(--swatch); }
@@ -361,7 +362,6 @@ body:has(.sheet-bg, .dropdown-bg) { overflow: hidden; }
 }
 
 /* Exercise detail */
-.target-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .stats.two { grid-template-columns: 1fr 1fr; }
 .rep-table > div { padding-top: 10px !important; padding-bottom: 10px !important; }
 .rep-table .rep-n { width: 40px; font-weight: 700; }
@@ -416,10 +416,11 @@ body:has(.sheet-bg, .dropdown-bg) { overflow: hidden; }
 .tpl-name { text-align: left; font-weight: 600; }
 .mini-stepper { display: flex; align-items: center; gap: 2px; background: var(--surface-2); border-radius: 10px; }
 .mini-stepper button { width: 32px; height: 32px; font-size: 18px; color: var(--accent-text); }
-.range-row { padding: 10px 0 4px; border-top: 1px solid var(--line); margin-top: 8px; }
-.range-row b { display: block; margin-bottom: 6px; }
-.range-step { display: inline-flex; align-items: center; gap: 6px; margin: 0 14px 6px 0; }
-.range-step > .small { width: 34px; }
+.tv-group { padding-top: 10px; border-top: 1px solid var(--line); margin-top: 10px; }
+.tv-row { display: flex; align-items: center; gap: 6px; min-height: 40px; }
+.tv-row .grow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.tv-reset { font-size: 12px; font-weight: 650; color: var(--accent-text); padding: 4px 0; }
+.mini-stepper .num { min-width: 34px; }
 .mini-stepper span { min-width: 18px; padding: 0 2px; text-align: center; font-weight: 700; font-size: 14px; }
 .weigh-form { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .weigh-form input { width: 100%; min-width: 0; }

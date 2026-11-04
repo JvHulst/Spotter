@@ -14,6 +14,7 @@ import { startSync } from "./sync.js";
 import { sheetHtml } from "./views/sheet.js";
 import { playSound, unlockAudio } from "./sounds.js";
 import { beginReorder } from "./reorder.js";
+import { loadDevice, restChanged } from "./push.js";
 
 const root = document.getElementById("app");
 const TABS = [["today", "#today", "Today"], ["log", "#history", "History"], ["progress", "#progress", "Progress"],
@@ -227,6 +228,7 @@ setInterval(tick, 250);
 actions["rest-add"] = ({ s }) => {
   state.active.rest.endsAt += +s * 1000;
   state.active.rest.total = Math.max(1, state.active.rest.total + +s);
+  restChanged();
   return saveActive();
 };
 actions["rest-skip"] = () => {
@@ -254,7 +256,7 @@ window.addEventListener("hashchange", updateWakeLock);
 
 // --- Start --------------------------------------------------------------------------------
 
-await loadState();
+await Promise.all([loadState(), loadDevice()]);
 applyAppearance();
 render();
 updateWakeLock();

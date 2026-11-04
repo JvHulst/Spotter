@@ -185,8 +185,7 @@ function plateLoadings(kg) {
 }
 
 /**
- * Ramp-up sets before the working sets of a compound exercise. Isolation exercises get none,
- * since their loads are too light to need a ramp.
+ * Warm-up sets before the working sets of an exercise with external load and a weight step.
  *
  * A barbell exercise starts with the empty bar. The next warm-ups are the loads on the way to
  * the working weight when its plates go on largest first, so each warm-up only adds plates. Of
@@ -194,8 +193,8 @@ function plateLoadings(kg) {
  * closest to WARMUP_STEPS is used. Other exercises get the WARMUP_STEPS loads rounded down to
  * their increment.
  */
-export function warmupSets(workKg, ex, kind) {
-  if (kind !== "compound" || !workKg || ex.load !== "none" || !ex.increment) return [];
+export function warmupSets(workKg, ex) {
+  if (!workKg || ex.load !== "none" || !ex.increment) return [];
   const targets = WARMUP_STEPS.map((f) => f * workKg);
   let loads;
   if (ex.equipment === "barbell") {

@@ -12,7 +12,7 @@
 // deleted; the program and the settings each take the more recently saved version.
 
 import { kv, sessionStore } from "./db.js";
-import { state, hooks, reindex, addCustomExercises, cleanSettings, cleanDeleted, cleanWeights, storeWeights } from "./state.js";
+import { state, hooks, reindex, addCustomExercises, cleanSettings, storedSettings, cleanDeleted, cleanWeights, storeWeights } from "./state.js";
 import { cleanProgram } from "./program.js";
 import { cleanSession } from "./history.js";
 
@@ -140,7 +140,7 @@ export const syncStatus = () => kv.get("sync").then((cfg) => cfg && { repo: cfg.
 const yearOf = (s) => s.start.slice(0, 4);
 
 function localDoc(name) {
-  if (name === "program.bin") return { program: state.program, settings: state.settings, deleted: state.deleted, weights: state.weights };
+  if (name === "program.bin") return { program: state.program, settings: storedSettings(state.settings), deleted: state.deleted, weights: state.weights };
   const year = name.slice(9, 13);
   return { sessions: state.sessions.filter((s) => yearOf(s) === year) };
 }
@@ -155,7 +155,7 @@ function merge(name, mine, theirs) {
     for (const [id, at] of Object.entries(mine.deleted ?? {})) deleted[id] = Math.max(at, deleted[id] ?? 0);
     const weights = { ...mine.weights };
     for (const [date, w] of Object.entries(cleanWeights(theirs.weights))) if (w.at > (weights[date]?.at ?? -1)) weights[date] = w;
-    return { program: newer(mine.program, cleanProgram(theirs.program)), settings: newer(mine.settings, cleanSettings(theirs.settings)), deleted, weights };
+    return { program: newer(mine.program, cleanProgram(theirs.program)), settings: storedSettings(newer(mine.settings, cleanSettings(theirs.settings))), deleted, weights };
   }
   const local = new Map(state.sessions.map((s) => [s.id, s]));
   const byId = new Map(mine.sessions.map((s) => [s.id, s]));
@@ -169,7 +169,7 @@ function merge(name, mine, theirs) {
 /** Store a merged document on this device. */
 async function apply(name, doc) {
   if (name === "program.bin") {
-    Object.assign(state, { program: doc.program, settings: doc.settings, deleted: doc.deleted });
+    Object.assign(state, { program: doc.program, settings: cleanSettings(doc.settings), deleted: doc.deleted });
     addCustomExercises(doc.program.extra);
     await Promise.all([kv.set("program", doc.program), kv.set("settings", doc.settings), kv.set("deleted", doc.deleted), storeWeights(doc.weights)]);
     const gone = state.sessions.filter((s) => doc.deleted[s.id]);

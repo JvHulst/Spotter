@@ -1,7 +1,7 @@
 // Settings: sync, import and backup, bodyweight, rest timer defaults and theme.
 
-import { state, saveSettings, saveProgram, saveSessions, addCustomExercises, reindex, cleanSettings, cleanDeleted, cleanWeights,
-  storeWeights, bodyweight, hooks, DEFAULT_SETTINGS } from "../state.js";
+import { state, saveSettings, saveProgram, saveSessions, addCustomExercises, reindex, cleanSettings, storedSettings, cleanDeleted,
+  cleanWeights, storeWeights, bodyweight, hooks, DEFAULT_SETTINGS } from "../state.js";
 import { kv, backup, clearAll } from "../db.js";
 import { defaultProgram, cleanProgram, CATEGORY_LABEL } from "../program.js";
 import { cleanSession } from "../history.js";
@@ -9,6 +9,8 @@ import { parseCsv, csvKind, weighIns, strongSessions } from "../strong.js";
 import { connect, disconnect, sync, syncStatus } from "../sync.js";
 import { actions, ask, esc, fmtClock, fmtKg, plural, toast, ago } from "../ui.js";
 import { SOUNDS, DEFAULT_SOUND, playSound } from "../sounds.js";
+import { trainingRows } from "./training.js";
+import { alertMode, setAlertMode, pushSupported, SHORTCUT } from "../push.js";
 
 /** Accent colors; red is the default of the stylesheet (--accent in css/app.css). */
 const ACCENTS = { red: "#d93d42", orange: "#cc420b", blue: "#2f6fe4", green: "#26883f" };
@@ -27,7 +29,7 @@ export function settingsView() {
   const s = state.settings;
   const rest = (key, label) => `
     <div class="row" style="padding:6px 0">
-      <div class="grow">${label}</div>
+      <div class="grow">${label}${s[key] !== DEFAULT_SETTINGS[key] ? `<button class="tv-reset" data-action="rest-reset" data-key="${key}">Custom · Reset</button>` : ""}</div>
       <button class="btn small" data-action="rest-step" data-key="${key}" data-d="-1">−15 s</button>
       <b class="num" style="min-width:48px;text-align:center">${fmtClock(s[key])}</b>
       <button class="btn small" data-action="rest-step" data-key="${key}" data-d="1">+15 s</button>
@@ -54,23 +56,17 @@ export function settingsView() {
       <span class="small link-text">Weigh-ins ›</span>
     </a>
     <section class="card">
-      <div class="eyebrow">Rep ranges and reps in reserve</div>
-      <p class="small muted" style="margin:6px 0 2px">Heavy compounds are barbell compounds such as squat, bench press, deadlift and rows.
-        Other compounds use machines, cables, dumbbells or bodyweight. Failure (RIR 0) is fine for those and for isolations,
-        and costs too much under a heavy bar.</p>
-      ${Object.entries(s.ranges).map(([k, r]) => `
-        <div class="range-row">
-          <b>${CATEGORY_LABEL[k]}</b>
-          ${rangeStepper(k, "reps", r.reps, "reps")}${rangeStepper(k, "rir", r.rir, "RIR")}
-        </div>`).join("")}
+      <div class="eyebrow">Training per category</div>
+      <p class="small muted" style="margin:6px 0 2px">An exercise's page in the Library can set its own values.</p>
+      ${Object.keys(s.categories).map((c) => `<div class="tv-group"><b>${CATEGORY_LABEL[c]}</b>${trainingRows("category", c)}</div>`).join("")}
     </section>
     <section class="card">
       <div class="eyebrow">Rest timer</div>
-      ${rest("restCompound", "Compound")}${rest("restIsolation", "Isolation")}
-      ${rest("restSuperset", "Superset")}${rest("restWarmup", "Warm-up")}
+      ${rest("restSuperset", "Superset")}${rest("restWarmup", "After a warm-up set")}
       <div class="small muted" style="margin:10px 0 6px">Sound when the rest ends</div>
       <div class="chips" style="flex-wrap:wrap">${Object.entries(SOUND_CHOICES).map(([id, label]) =>
         `<button class="chip ${(s.sound ?? DEFAULT_SOUND) === id ? "on" : ""}" data-action="sound" data-id="${id}">${label}</button>`).join("")}</div>
+      ${alertCard()}
     </section>
     <section class="card">
       <div class="eyebrow">Appearance</div>
@@ -83,13 +79,23 @@ export function settingsView() {
   return { title: "Settings", back: "#today", body };
 }
 
-/** Steppers for the low and high end of a category's rep or RIR range. */
-function rangeStepper(category, key, [lo, hi], label) {
-  const button = (end, d, text) => `<button data-action="range-step" data-c="${category}" data-k="${key}" data-end="${end}" data-d="${d}" aria-label="${text}">${d < 0 ? "−" : "+"}</button>`;
-  return `<div class="range-step"><span class="small muted">${label}</span>
-    <div class="mini-stepper">${button(0, -1, "Lower the low end")}<span class="num">${lo}</span>${button(0, 1, "Raise the low end")}</div>
-    <span class="muted">–</span>
-    <div class="mini-stepper">${button(1, -1, "Lower the high end")}<span class="num">${hi}</span>${button(1, 1, "Raise the high end")}</div></div>`;
+/** How a rest ends while Spotter is in the background, chosen per device. */
+function alertCard() {
+  const mode = alertMode();
+  const modes = { off: "Off", push: "Notification", timer: "iPhone timer" };
+  const help = {
+    off: "The sound plays only while Spotter is open.",
+    push: pushSupported() ? "A notification with the iPhone's sound ends the rest when Spotter is in the background or the phone is locked. Music keeps playing."
+      : "Notifications need Spotter on the home screen.",
+    timer: `Each rest starts the iPhone's timer, with a countdown on the lock screen, and opens the Shortcuts app for a moment.
+      Create the shortcut once: in Shortcuts, add a shortcut named <b>${SHORTCUT}</b> with the action Start Timer,
+      tap its duration, choose Shortcut Input and set it to seconds.`,
+  };
+  return `
+    <div class="small muted" style="margin:14px 0 6px">When Spotter is in the background (this device)</div>
+    <div class="chips" style="flex-wrap:wrap">${Object.entries(modes).map(([m, label]) =>
+      `<button class="chip ${mode === m ? "on" : ""}" data-action="alert-mode" data-m="${m}" ${m === "push" && !pushSupported() ? "disabled" : ""}>${label}</button>`).join("")}</div>
+    <p class="small muted" style="margin:8px 0 0">${help[mode]}</p>`;
 }
 
 function syncCard() {
@@ -203,7 +209,7 @@ async function restore(doc) {
     parts.push("program");
   }
   if (doc.settings) {
-    state.settings = cleanSettings({ ...state.settings, ...doc.settings });
+    state.settings = cleanSettings(doc.settings);
     await saveSettings();
   }
   const weights = { ...cleanWeights(doc.weights) };
@@ -225,7 +231,7 @@ async function restore(doc) {
 }
 
 actions.export = async () => {
-  const data = JSON.stringify(backup(state));
+  const data = JSON.stringify(backup({ ...state, settings: storedSettings(state.settings) }));
   const name = `spotter-backup-${new Date().toISOString().slice(0, 10)}.json`;
   const file = new File([data], name, { type: "application/json" });
   if (navigator.canShare?.({ files: [file] })) {
@@ -237,18 +243,21 @@ actions.export = async () => {
   }
 };
 
-actions["range-step"] = ({ c, k, end, d }) => {
-  const range = [...state.settings.ranges[c][k]];
-  const [min, max] = k === "reps" ? [1, 30] : [0, 5];
-  range[+end] = Math.min(max, Math.max(min, range[+end] + +d));
-  if (range[0] > range[1]) return;
-  state.settings.ranges = { ...state.settings.ranges, [c]: { ...state.settings.ranges[c], [k]: range } };
-  return saveSettings();
-};
-
 actions["rest-step"] = ({ key, d }) => {
   state.settings[key] = Math.min(600, Math.max(15, state.settings[key] + 15 * +d));
   return saveSettings();
+};
+actions["rest-reset"] = ({ key }) => {
+  state.settings[key] = DEFAULT_SETTINGS[key];
+  return saveSettings();
+};
+
+actions["alert-mode"] = async ({ m }) => {
+  try {
+    await setAlertMode(m);
+  } catch (error) {
+    toast(error.message);
+  }
 };
 
 actions.theme = ({ t }) => {
@@ -276,7 +285,7 @@ export function applyAppearance() {
   const root = document.documentElement;
   if (theme === "dark" || theme === "light") root.dataset.theme = theme;
   else delete root.dataset.theme;
-  if (accent !== "red" && ACCENTS[accent]) {
+  if (accent !== "red" && Object.hasOwn(ACCENTS, accent)) {
     root.dataset.accent = accent;
     root.style.setProperty("--accent", ACCENTS[accent]);
   } else {
@@ -288,7 +297,7 @@ export function applyAppearance() {
 actions.wipe = async () => {
   if (!(await ask("Delete all workouts, the program and the settings from this device? Data synced to GitHub stays there.", { ok: "Delete", danger: true }))) return;
   await clearAll();
-  Object.assign(state, { program: defaultProgram(), sessions: [], deleted: {}, weights: {}, latestWeight: null, active: null, settings: { ...DEFAULT_SETTINGS } });
+  Object.assign(state, { program: defaultProgram(), sessions: [], deleted: {}, weights: {}, latestWeight: null, active: null, settings: cleanSettings() });
   reindex();
   applyAppearance();
   status = null;

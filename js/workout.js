@@ -4,12 +4,13 @@
 // come first and are excluded from progression. `focus` is the set being logged next.
 
 import { planExercise, nextSetWeight, warmupSets, finisherSets, nextTemplateId } from "./progression.js";
-import { state, exercise, pattern, bodyweight, saveActive, saveProgram, saveSessions } from "./state.js";
+import { state, exercise, bodyweight, saveActive, saveProgram, saveSessions } from "./state.js";
 import { splitWeighted } from "./strong.js";
-import { template, rotation, dayPlan, targetFor, restFor, ownTemplate, createTemplate, setTemplateSlots, allowsFinisher,
-  setSlotOption } from "./program.js";
+import { template, rotation, dayPlan, targetFor, restFor, warmupFor, setTrainingValue, ownTemplate, createTemplate, setTemplateSlots,
+  allowsFinisher, setSlotOption } from "./program.js";
 import { afterSet, firstOpen as firstOpenIn } from "./rest.js";
 import { carryDown } from "./carry.js";
+import { restStarted } from "./push.js";
 
 export const suggestedTemplateId = () => nextTemplateId(rotation(), state.sessions);
 
@@ -23,8 +24,8 @@ export function planFor(id, nSets) {
 
 function entryFor(id, slot, nSets = slot?.sets ?? 3) {
   const plan = planFor(id, nSets);
-  const warmup = slot?.warmup !== false;
-  const warmups = warmup ? warmupSets(plan.sets[0].kg, exercise(id), pattern(id).kind) : [];
+  const warmup = warmupFor(id);
+  const warmups = warmup ? warmupSets(plan.sets[0].kg, exercise(id)) : [];
   const last = plan.sets.at(-1);
   const finisher = allowsFinisher(id) ? slot?.finisher ?? "" : "";
   return {
@@ -83,19 +84,18 @@ function replan(entry) {
   });
 }
 
-/** Turn the warm-up sets of entry e on or off, and store the choice in the slot of a built-in day. */
+/** Turn the warm-up sets of entry e on or off, and store the choice as the exercise's own value (see setTrainingValue). */
 export async function setWarmups(e, on) {
   const entry = state.active.exercises[e];
   const first = entry.sets.find((x) => !x.warmup && !x.type);
   entry.warmup = on;
   entry.sets = entry.sets.filter((x) => !x.warmup || x.done);
   if (on && !entry.sets.some((x) => x.warmup)) {
-    const warmups = warmupSets(first?.kg, exercise(entry.ex), pattern(entry.ex).kind);
+    const warmups = warmupSets(first?.kg, exercise(entry.ex));
     entry.sets.unshift(...warmups.map((w) => ({ warmup: true, kg: w.kg, reps: w.reps, rir: null, done: false })));
   }
-  setSlotOption(state.active.template, entry.slot, "warmup", on);
   state.active.focus = firstOpen(e);
-  await saveProgram();
+  await setTrainingValue("exercise", entry.ex, "warmup", on);
   await saveActive();
 }
 
@@ -133,6 +133,7 @@ export async function logSet(e, s) {
   const next = afterSet(state.active.exercises, e, s, { warmup: settings.restWarmup, superset: settings.restSuperset, of: restFor });
   state.active.focus = next?.focus ?? null;
   state.active.rest = next ? { endsAt: Date.now() + next.rest * 1000, total: next.rest } : null;
+  restStarted();
   await saveActive();
 }
 
@@ -241,8 +242,7 @@ async function storeSupersets() {
 }
 
 const templateItems = () => state.active.exercises.map((x) => ({
-  ex: x.ex, sets: x.sets.filter((s) => !s.warmup && !s.type).length, superset: x.superset, finisher: x.finisher ?? "",
-  warmup: x.warmup !== false, slot: x.slot }));
+  ex: x.ex, sets: x.sets.filter((s) => !s.warmup && !s.type).length, superset: x.superset, finisher: x.finisher ?? "", slot: x.slot }));
 
 /** Save the current exercises as a new template and continue the workout as that template. */
 export async function saveAsTemplate(name) {

@@ -139,7 +139,6 @@ export function templateView(id) {
           <span class="num">${slot.sets} sets</span>
           <button data-action="tpl-sets" data-id="${id}" data-i="${i}" data-d="1" aria-label="More sets">+</button>
         </div>
-        <button class="chip small ${slot.warmup === false ? "" : "on"}" data-action="tpl-warmup" data-id="${id}" data-i="${i}">Warm-up</button>
         ${allowsFinisher(slot.ex) ? `<button class="chip small ${slot.finisher ? "on" : ""}" data-action="tpl-finisher" data-id="${id}" data-i="${i}">${slot.finisher ? FINISHER_LABEL[slot.finisher] : "No finisher"}</button>` : ""}
       </div>
     </div>`).join("");
@@ -185,12 +184,6 @@ actions["tpl-name"] = (d, el) => {
 actions["tpl-sets"] = ({ id, i, d }) => {
   const slot = ownTemplate(id).slots[+i];
   slot.sets = Math.min(10, Math.max(1, slot.sets + +d));
-  return saveProgram();
-};
-actions["tpl-warmup"] = ({ id, i }) => {
-  const slot = ownTemplate(id).slots[+i];
-  if (slot.warmup === false) delete slot.warmup;
-  else slot.warmup = false;
   return saveProgram();
 };
 actions["tpl-finisher"] = ({ id, i }) => {

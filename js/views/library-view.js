@@ -2,12 +2,13 @@
 // targets and its recent sessions.
 
 import { state, exercise, pattern, bodyweight, saveProgram } from "../state.js";
-import { targetFor, restFor, exerciseCategory, CATEGORY_LABEL } from "../program.js";
+import { exerciseCategory, CATEGORY_LABEL } from "../program.js";
+import { trainingRows } from "./training.js";
 import { exerciseSeries, records } from "../history.js";
 import { loadFor } from "../progression.js";
 import { MUSCLES, MINOR_MUSCLES } from "../library.js";
 import { lineChart, compact, rangeStart, rangeChips } from "../charts.js";
-import { actions, esc, ago, fmtDate, fmtKg, fmtClock, setsText } from "../ui.js";
+import { actions, esc, ago, fmtDate, fmtKg, setsText } from "../ui.js";
 
 const METRICS = { e1rm: "Est. 1RM", top: "Heaviest", volume: "Volume" };
 
@@ -131,21 +132,18 @@ function repTable(entries, e) {
       ${rows}</div>`;
 }
 
+/** The exercise's training values, which follow its category until set here, and its weight step. */
 function targetsCard(id, e) {
-  const t = targetFor(id);
-  const stepper = (key, value, label) => `
-    <div><div class="field-label">${label}</div><div class="stepper">
-      <button data-action="target-step" data-id="${id}" data-key="${key}" data-d="-1">−</button>
-      <div class="num" style="text-align:center;font-weight:700;font-size:18px">${value}</div>
-      <button data-action="target-step" data-id="${id}" data-key="${key}" data-d="1">+</button></div></div>`;
+  const own = state.program.exercises[id]?.increment != null;
+  const step = (d) => `<button data-action="increment-step" data-id="${id}" data-d="${d}" aria-label="${d < 0 ? "Smaller" : "Larger"} step">${d < 0 ? "−" : "+"}</button>`;
   return `
     <section class="card">
-      <div class="eyebrow">Targets</div>
-      <p class="small" style="margin:6px 0 4px">${CATEGORY_LABEL[exerciseCategory(id)]}: ${t.reps.join("–")} reps at RIR ${t.rir.join("–")}.
-        <a class="link-text" href="#setup">Change in Settings</a></p>
-      <div class="target-grid">
-        ${stepper("increment", fmtKg(e.increment), "Step (kg)")}
-        ${stepper("rest", fmtClock(restFor(id)), "Rest")}
+      <div class="eyebrow">Training</div>
+      <p class="small muted" style="margin:6px 0 2px">Values of ${CATEGORY_LABEL[exerciseCategory(id)]} in <a class="link-text" href="#setup">Settings</a>, unless set here.</p>
+      ${trainingRows("exercise", id)}
+      <div class="tv-row">
+        <div class="grow">Weight step${own ? `<button class="tv-reset" data-action="increment-reset" data-id="${id}">Custom · Reset</button>` : ""}</div>
+        <div class="mini-stepper">${step(-1)}<span class="num">${fmtKg(e.increment)} kg</span>${step(1)}</div>
       </div>
       ${e.equipment === "dumbbell" ? `<div class="small muted" style="margin-top:8px">Dumbbell weights are the total of both dumbbells.</div>` : ""}
     </section>`;
@@ -157,11 +155,6 @@ function recentList(entries) {
       <div class="small muted">${esc(setsText(x.sets))}</div></div></a>`).join("")}</div>`;
 }
 
-/** Store a change to an exercise's weight step or rest time in the program. */
-function updateTarget(id, change) {
-  state.program.exercises[id] = { ...state.program.exercises[id], ...change };
-  return saveProgram();
-}
 
 actions["lib-muscle"] = ({ m }) => { state.ui.muscle = m; };
 actions["lib-search"] = (_, el) => {
@@ -171,14 +164,15 @@ actions["lib-search"] = (_, el) => {
 };
 actions["ex-metric"] = ({ v }) => { state.ui.exMetric = v; };
 actions["ex-range"] = ({ v }) => { state.ui.exRange = v; };
-actions["target-step"] = ({ id, key, d }) => {
-  const step = +d;
-  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-  if (key === "rest") return updateTarget(id, { restSec: clamp(restFor(id) + 15 * step, 15, 600) });
-  if (key === "increment") {
-    const now = exercise(id).increment;
-    const steps = [0, 0.5, 1, 1.25, 2, 2.5, 4, 5, 10];
-    const i = clamp(steps.findIndex((s) => s >= now) + step, 0, steps.length - 1);
-    return updateTarget(id, { increment: steps[i] });
-  }
+const STEPS = [0, 0.5, 1, 1.25, 2, 2.5, 4, 5, 10];
+actions["increment-step"] = ({ id, d }) => {
+  const i = Math.min(STEPS.length - 1, Math.max(0, STEPS.findIndex((s) => s >= exercise(id).increment) + +d));
+  state.program.exercises[id] = { ...state.program.exercises[id], increment: STEPS[i] };
+  return saveProgram();
+};
+actions["increment-reset"] = ({ id }) => {
+  const { increment: _, ...rest } = state.program.exercises[id];
+  if (Object.keys(rest).length) state.program.exercises[id] = rest;
+  else delete state.program.exercises[id];
+  return saveProgram();
 };

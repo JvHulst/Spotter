@@ -5,32 +5,60 @@ import { loadLibrary } from "./library.js";
 import { indexByExercise, lastBySlot, usageCounts, sessionRecords } from "./history.js";
 import { builtinDays, defaultProgram, migrateProgram } from "./program.js";
 import { splitWeighted } from "./strong.js";
-import { DEFAULT_SOUND } from "./sounds.js";
+import { SOUNDS, DEFAULT_SOUND } from "./sounds.js";
 
-/** Rest in seconds. Rest beyond about 90 s shows no detectable extra hypertrophy (Singer et al.
- *  2024, Front. Sports Act. Living 6:1429789); heavy compound lifts get a little more.
- *  `accent` is a key of ACCENTS in views/settings.js and `sound` a key of SOUNDS in sounds.js
- *  or "off". */
-export const DEFAULT_SETTINGS = {
-  restCompound: 120, restIsolation: 90, restSuperset: 45, restWarmup: 60, theme: "dark", accent: "red", sound: DEFAULT_SOUND, bodyweight: 80,
-  ranges: {
-    heavy: { reps: [5, 8], rir: [1, 2] },
-    compound: { reps: [8, 12], rir: [0, 1] },
-    isolation: { reps: [10, 20], rir: [0, 1] },
-  },
+/**
+ * The training values of each category of exercise (see exerciseCategory in program.js): rep
+ * range, target reps in reserve (RIR), rest after a working set in seconds, and whether working
+ * sets get warm-up sets. Settings changes them per category and an exercise's page per exercise.
+ *
+ * Heavy loads build more maximal strength while growth is similar across loads when sets end
+ * near failure (Schoenfeld et al. 2017, J. Strength Cond. Res. 31:3508), so only barbell
+ * compounds use low reps. Sets closer to failure add growth but not strength (Robinson et al.
+ * 2024, Sports Med. 54:2209), and failure costs little on a machine or an isolation exercise but
+ * much fatigue and risk under a heavy bar, so only barbell compounds stop short of it. Rest beyond
+ * about 90 s shows no detectable extra growth (Singer et al. 2024, Front. Sports Act. Living
+ * 6:1429789); compound lifts get a little more. Isolation loads are too light to need warm-ups.
+ */
+export const CATEGORY_DEFAULTS = {
+  heavy: { reps: [5, 8], rir: [1, 2], rest: 120, warmup: true },
+  compound: { reps: [8, 12], rir: [0, 1], rest: 120, warmup: true },
+  isolation: { reps: [10, 20], rir: [0, 1], rest: 90, warmup: false },
 };
 
-/** Settings from outside the app: known keys with values of the default's type, and for each
- *  category of `ranges` a rep range and an RIR range of two whole numbers. */
+/** Settings that differ from these defaults are stored; the others follow the defaults, also when
+ *  a release changes them. `categories` holds the user's own values per category, keyed as in
+ *  CATEGORY_DEFAULTS. `accent` is a key of ACCENTS in views/settings.js and `sound` a key of
+ *  SOUNDS in sounds.js or "off". */
+export const DEFAULT_SETTINGS = {
+  restSuperset: 45, restWarmup: 60, theme: "dark", accent: "red", sound: DEFAULT_SOUND, bodyweight: 80,
+  categories: { heavy: {}, compound: {}, isolation: {} },
+};
+
+const pair = (v, [min, max]) => Array.isArray(v) && v.length === 2 && v.every((x) => Number.isInteger(x) && x >= min && x <= max) && v[0] <= v[1];
+const VALID = {
+  reps: (v) => pair(v, [1, 50]), rir: (v) => pair(v, [0, 5]),
+  rest: (v) => Number.isInteger(v) && v >= 0 && v <= 900, warmup: (v) => typeof v === "boolean",
+};
+/** The valid training values among v (see CATEGORY_DEFAULTS), leaving out those equal to `defaults`. */
+export function cleanValues(v, defaults = {}) {
+  return Object.fromEntries(Object.keys(VALID).filter((k) => VALID[k](v?.[k]) && JSON.stringify(v[k]) !== JSON.stringify(defaults[k]))
+    .map((k) => [k, v[k]]));
+}
+
+/** Settings from outside the app: known keys with values of the default's type, and valid
+ *  training values per category. Settings saved as `ranges`, `restCompound` and `restIsolation`
+ *  read as category values. */
 export function cleanSettings(s = {}) {
   const out = Object.fromEntries(Object.entries(DEFAULT_SETTINGS).map(([k, v]) => [k, typeof s?.[k] === typeof v ? s[k] : v]));
-  const pair = (v) => Array.isArray(v) && v.length === 2 && v.every(Number.isInteger) && v[0] <= v[1];
-  out.ranges = Object.fromEntries(Object.entries(DEFAULT_SETTINGS.ranges).map(([k, d]) => {
-    const r = s?.ranges?.[k];
-    return [k, pair(r?.reps) && pair(r?.rir) ? { reps: r.reps, rir: r.rir } : d];
-  }));
+  if (out.sound !== "off" && !Object.hasOwn(SOUNDS, out.sound)) out.sound = DEFAULT_SOUND;
+  out.categories = Object.fromEntries(Object.entries(CATEGORY_DEFAULTS).map(([c, d]) => [c, cleanValues({
+    ...s?.ranges?.[c], rest: c === "isolation" ? s?.restIsolation : s?.restCompound, ...s?.categories?.[c] }, d)]));
   return Number.isFinite(s?.updatedAt) ? { ...out, updatedAt: s.updatedAt } : out;
 }
+/** Settings as stored and synced: only those that differ from DEFAULT_SETTINGS. */
+export const storedSettings = (s) => Object.fromEntries(Object.entries(s)
+  .filter(([k, v]) => k === "updatedAt" || k === "categories" || (k in DEFAULT_SETTINGS && v !== DEFAULT_SETTINGS[k])));
 /** Deleted session ids from outside the app, as a map from id to the time of deletion. */
 export const cleanDeleted = (d) => Object.fromEntries(Object.entries(d ?? {}).filter(([id, at]) => /^[\w.:-]{1,80}$/.test(id) && Number.isFinite(at)));
 /** Weigh-ins from outside the app, as a map from date to {kg, at}. */
@@ -45,7 +73,7 @@ export const state = {
   deleted: {},
   weights: {},
   latestWeight: null,
-  settings: { ...DEFAULT_SETTINGS },
+  settings: cleanSettings(),
   active: null,
   index: new Map(),
   slotLast: new Map(),
@@ -98,7 +126,7 @@ export async function saveProgram() {
 }
 export async function saveSettings() {
   state.settings.updatedAt = Date.now();
-  await kv.set("settings", state.settings);
+  await kv.set("settings", storedSettings(state.settings));
   hooks.changed();
 }
 export const saveActive = () => (state.active ? kv.set("active", state.active) : kv.delete("active"));

@@ -1,13 +1,13 @@
 // Service worker: keeps the app usable offline. Files are served from the cache and refreshed
 // from the network in the background, so a new version is picked up on the next launch.
 
-const CACHE = "spotter-v15";
+const CACHE = "spotter-v16";
 const SHELL = [
   "./", "index.html", "manifest.webmanifest", "css/app.css",
   "js/app.js", "js/carry.js", "js/charts.js", "js/db.js", "js/history.js", "js/library.js", "js/program.js", "js/progression.js",
-  "js/reorder.js", "js/rest.js", "js/confetti.js", "js/sounds.js", "js/state.js", "js/strong.js", "js/sync.js", "js/ui.js", "js/workout.js",
+  "js/push.js", "js/reorder.js", "js/rest.js", "js/confetti.js", "js/sounds.js", "js/state.js", "js/strong.js", "js/sync.js", "js/ui.js", "js/workout.js",
   "js/views/library-view.js", "js/views/log.js", "js/views/muscles.js", "js/views/progress.js", "js/views/settings.js",
-  "js/views/sheet.js", "js/views/today.js", "js/views/workout-view.js",
+  "js/views/sheet.js", "js/views/today.js", "js/views/training.js", "js/views/workout-view.js",
   "data/cues.json", "data/exercises.csv", "data/patterns.csv", "data/splits.json", "sounds/fahhh.mp3", "icons/icon.svg", "icons/icon-180.png", "icons/icon-192.png",
 ];
 
@@ -36,4 +36,21 @@ self.addEventListener("fetch", (event) => {
     }
     return fresh;
   }));
+});
+
+// A rest alert from the push server (see js/push.js), shown also when the app is closed.
+self.addEventListener("push", (event) => {
+  let message = {};
+  try {
+    message = event.data?.json() ?? {};
+  } catch {}
+  event.waitUntil(self.registration.showNotification(message.title ?? "Rest is over",
+    { body: message.body ?? "", tag: "rest", icon: "icons/icon-192.png" }));
+});
+
+// Tapping an alert opens the app.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(self.clients.matchAll({ type: "window" })
+    .then((windows) => windows[0]?.focus() ?? self.clients.openWindow("./#workout")));
 });

@@ -8,12 +8,13 @@
 //
 // The stored program holds only what the user chose: the active split, their own templates and
 // their edited versions of built-in days (`custom`, the latter marked `fork`), superset links of
-// built-in slots (`slots`), per-exercise weight steps and rest times (`exercises`),
+// built-in slots (`slots`), per-exercise exceptions to the training values of their category and
+// weight steps (`exercises`, see trainingValue),
 // exercises added outside the library (`extra`), exercises kept despite a proposed change,
 // with the time of that choice (`keep`), diet phases with their start dates (`phases`), and the
 // exercises chosen for the one-rep-max dashboard (`tracked`).
 
-import { state, exercise, pattern, bodyweight } from "./state.js";
+import { state, exercise, pattern, bodyweight, saveSettings, saveProgram, cleanValues, CATEGORY_DEFAULTS } from "./state.js";
 import { exerciseSeries, stalled, runWeeks, muscleStats } from "./history.js";
 import { MUSCLES, MINOR_MUSCLES } from "./library.js";
 import { daysBetween } from "./progression.js";
@@ -26,21 +27,52 @@ export const STRENGTH_LIFTS = new Set(["squat-barbell", "bench-press-barbell", "
  *  bench press or deadlift. */
 export const bigThreeRecords = (records) => records.filter((r) => r.kind === "e1rm" && STRENGTH_LIFTS.has(r.ex));
 
-/**
- * The category of an exercise, which sets its rep range and target RIR (settings.ranges): heavy
- * compounds with a barbell, other compounds (machines, cables, dumbbells, bodyweight), and
- * isolations. Heavy loads build more maximal strength while growth is similar across loads when
- * sets end near failure (Schoenfeld et al. 2017, J. Strength Cond. Res. 31:3508), so only barbell
- * compounds use low reps. Sets closer to failure add growth but not strength (Robinson et al.
- * 2024, Sports Med. 54:2209), and failure costs little on a machine or an isolation exercise but
- * much fatigue and risk under a heavy bar, so only barbell compounds stop short of it.
- */
+/** The category of an exercise, which sets its training values (see CATEGORY_DEFAULTS in
+ *  state.js): compounds with a barbell, other compounds (machines, cables, dumbbells, bodyweight),
+ *  and isolations. */
 export function exerciseCategory(id) {
   const ex = exercise(id);
   if (pattern(id).kind === "isolation") return "isolation";
   return ex.equipment === "barbell" && ex.load === "none" ? "heavy" : "compound";
 }
-export const CATEGORY_LABEL = { heavy: "Heavy compounds", compound: "Other compounds", isolation: "Isolations" };
+export const CATEGORY_LABEL = { heavy: "Barbell compounds", compound: "Other compounds", isolation: "Isolations" };
+
+/**
+ * A training value of an exercise ("reps", "rir", "rest" or "warmup", see CATEGORY_DEFAULTS) and
+ * where it comes from: the exercise's own exception ("exercise"), the user's value for its
+ * category ("category") or the default of its category ("default").
+ */
+export function trainingValue(id, key) {
+  const category = exerciseCategory(id);
+  const own = state.program?.exercises?.[id]?.[key];
+  if (own != null) return { value: own, from: "exercise" };
+  const mine = state.settings.categories[category][key];
+  return mine != null ? { value: mine, from: "category" } : { value: CATEGORY_DEFAULTS[category][key], from: "default" };
+}
+/** Rep range and target RIR of an exercise. */
+export const targetFor = (id) => ({ reps: trainingValue(id, "reps").value, rir: trainingValue(id, "rir").value });
+/** Rest after a working set of an exercise, in seconds. */
+export const restFor = (id) => trainingValue(id, "rest").value;
+/** Whether the working sets of an exercise get warm-up sets. */
+export const warmupFor = (id) => trainingValue(id, "warmup").value;
+
+/**
+ * Set a training value of a category (scope "category", id a key of CATEGORY_DEFAULTS) or an
+ * exception for one exercise (scope "exercise"), or remove it when value is null. A value equal to
+ * the one that applies without it is removed as well, so that it follows that value again.
+ */
+export function setTrainingValue(scope, id, key, value) {
+  if (scope === "category") {
+    const own = { ...state.settings.categories[id], [key]: value };
+    state.settings.categories = { ...state.settings.categories, [id]: cleanValues(own, CATEGORY_DEFAULTS[id]) };
+    return saveSettings();
+  }
+  const { [key]: _, ...rest } = state.program.exercises[id] ?? {};
+  state.program.exercises[id] = rest;
+  if (value != null && JSON.stringify(value) !== JSON.stringify(trainingValue(id, key).value)) rest[key] = value;
+  if (!Object.keys(rest).length) delete state.program.exercises[id];
+  return saveProgram();
+}
 
 const HOME = { id: "home", name: "Home", slots: [
   ["pull-up", 4], ["push-up", 4], ["dip", 3], ["inverted-row-bodyweight", 3], ["bulgarian-split-squat-bodyweight", 3],
@@ -94,21 +126,18 @@ export function cleanProgram(raw) {
   const exercises = {};
   for (const [id, t] of Object.entries(p.exercises ?? {})) {
     if (!ID.test(id) || !t) continue;
-    exercises[id] = Object.fromEntries(Object.entries({
-      increment: Number.isFinite(t.increment) ? t.increment : undefined, restSec: Number.isFinite(t.restSec) ? t.restSec : undefined })
-      .filter(([, v]) => v !== undefined));
+    exercises[id] = { ...cleanValues({ rest: t.restSec, ...t }), ...(Number.isFinite(t.increment) ? { increment: t.increment } : {}) };
   }
   return {
     version: 3, split: typeof p.split === "string" ? p.split : "full-body",
     custom: (p.custom ?? []).filter((t) => ID.test(t?.id) && Array.isArray(t.slots)).map((t) => ({
       id: t.id, name: name(t.name), ...(t.fork ? { fork: true } : {}),
       slots: t.slots.filter((s) => ID.test(s?.id) && ID.test(s.ex)).map((s) => ({ id: s.id, ex: s.ex, sets: Math.min(10, Math.max(1, Math.round(Number(s.sets)) || 3)),
-        superset: Boolean(s.superset), finisher: finisher(s.finisher), ...(s.warmup === false ? { warmup: false } : {}),
+        superset: Boolean(s.superset), finisher: finisher(s.finisher),
         ...(typeof s.name === "string" ? { name: s.name.slice(0, 40) } : {}) })),
     })),
     slots: Object.fromEntries(Object.entries(p.slots ?? {}).filter(([id]) => ID.test(id)).map(([id, v]) => [id, {
-      ...(v?.superset != null ? { superset: Boolean(v.superset) } : {}), ...(v?.finisher != null ? { finisher: finisher(v.finisher) } : {}),
-      ...(v?.warmup != null ? { warmup: Boolean(v.warmup) } : {}) }])),
+      ...(v?.superset != null ? { superset: Boolean(v.superset) } : {}), ...(v?.finisher != null ? { finisher: finisher(v.finisher) } : {}) }])),
     exercises,
     extra: (p.extra ?? []).filter((e) => ID.test(e?.id)).map((e) => ({ id: e.id, name: name(e.name), muscle: "other", pattern: "other",
       equipment: "other", load: "none", increment: Number.isFinite(e.increment) ? e.increment : 2.5, aliases: "" })),
@@ -132,13 +161,13 @@ export function template(id) {
   if (own) {
     return { id, name: own.name, custom: true, fork: Boolean(own.fork), slots: own.slots.filter((s) => exercise(s.ex)).map((s) => ({
       id: s.id, name: s.name ?? null, pattern: exercise(s.ex).pattern, prefer: [s.ex], sets: s.sets, superset: Boolean(s.superset),
-      finisher: s.finisher ?? "", warmup: s.warmup !== false })) };
+      finisher: s.finisher ?? "" })) };
   }
   const day = state.days.get(id);
   if (!day) return null;
   return { ...day, custom: false, slots: day.slots.map((s) => {
     const own = state.program.slots[s.id] ?? {};
-    return { ...s, superset: own.superset ?? Boolean(s.superset), finisher: own.finisher ?? s.finisher ?? "", warmup: own.warmup ?? true };
+    return { ...s, superset: own.superset ?? Boolean(s.superset), finisher: own.finisher ?? s.finisher ?? "" };
   }) };
 }
 
@@ -270,20 +299,12 @@ export function setSlotOption(templateId, slotId, key, value) {
 }
 export const FINISHER_LABEL = { "": "No finisher", drop: "Drop set", myo: "Myo-reps" };
 
-/** Rep range and target RIR of an exercise: those of its category (see exerciseCategory). */
-export const targetFor = (id) => state.settings.ranges[exerciseCategory(id)];
-
-/** Rest after a working set of an exercise, in seconds. */
-export function restFor(id) {
-  const own = state.program?.exercises?.[id]?.restSec;
-  return own ?? (pattern(id).kind === "compound" ? state.settings.restCompound : state.settings.restIsolation);
-}
 
 // --- The user's own templates --------------------------------------------------------------
 
 const newId = (prefix) => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
-/** A new template from a list of {ex, sets, superset, finisher, warmup}. Returns its id. */
+/** A new template from a list of {ex, sets, superset, finisher}. Returns its id. */
 export function createTemplate(name, items = []) {
   const id = newId("t");
   state.program.custom.push({ id, name, slots: [] });
@@ -297,13 +318,12 @@ export const ownTemplate = (id) => state.program.custom.find((t) => t.id === id)
 export function addTemplateSlot(t, ex, sets = 3) {
   t.slots.push({ id: newId(t.id), ex, sets });
 }
-/** Replace a template's exercises by [{ex, sets, superset, finisher, warmup, slot}]. An exercise that stays in its
+/** Replace a template's exercises by [{ex, sets, superset, finisher, slot}]. An exercise that stays in its
  *  slot keeps the slot's id, and with it the slot's history. */
 export function setTemplateSlots(t, items) {
   t.slots = items.map((x) => {
     const same = t.slots.find((s) => s.id === x.slot && s.ex === x.ex);
-    return { id: same?.id ?? newId(t.id), ex: x.ex, sets: x.sets, superset: Boolean(x.superset), finisher: x.finisher ?? "",
-      ...(x.warmup === false ? { warmup: false } : {}) };
+    return { id: same?.id ?? newId(t.id), ex: x.ex, sets: x.sets, superset: Boolean(x.superset), finisher: x.finisher ?? "" };
   });
 }
 /** Make a built-in day editable: an own copy with the same id and slot ids, so that it replaces
@@ -311,7 +331,7 @@ export function setTemplateSlots(t, items) {
 export function forkDay(id) {
   const day = template(id);
   state.program.custom.push({ id, name: day.name, fork: true, slots: dayPlan(day).map(({ slot, id: ex }) => ({
-    id: slot.id, name: slot.name, ex, sets: slot.sets, superset: slot.superset, finisher: slot.finisher, ...(slot.warmup ? {} : { warmup: false }) })) });
+    id: slot.id, name: slot.name, ex, sets: slot.sets, superset: slot.superset, finisher: slot.finisher })) });
 }
 
 /** Return an edited built-in day to its definition in data/splits.json. */
