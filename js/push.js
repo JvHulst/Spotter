@@ -14,7 +14,7 @@ import { state, exercise } from "./state.js";
 import { fmtKg } from "./ui.js";
 
 /** The push server, deployed with push/deploy.py; empty while there is none. */
-export const PUSH_SERVER = "";
+export const PUSH_SERVER = "https://spotter-push.spotter-jvhulst.workers.dev";
 /** The shortcut that starts a timer for the number of seconds it receives as text. */
 export const SHORTCUT = "Spotter Rest";
 
