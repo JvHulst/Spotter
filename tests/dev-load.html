@@ -16,6 +16,11 @@ import { state, loadState, saveSessions } from "../js/state.js";
 import { parseCsv, strongSessions } from "../js/strong.js";
 import { startWorkout, logSet } from "../js/workout.js";
 
+// It erases the data in this browser first, so it runs only on a local development server.
+if (!["127.0.0.1", "localhost"].includes(location.hostname)) {
+  document.getElementById("out").textContent = "This development helper runs only on a local server.";
+  throw new Error("dev-load runs only on a local server");
+}
 const params = new URLSearchParams(location.search);
 await clearAll();
 if (params.get("source") === "backup") {
