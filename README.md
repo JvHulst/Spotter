@@ -1,39 +1,21 @@
 # Spotter
 
-Spotter is a workout tracker for hypertrophy training on the iPhone. It plans the weight and reps of every set, logs your workouts and charts your progress. Open it at https://jvhulst.github.io/Spotter/. Once added to the home screen, it also works offline.
+Spotter is a free workout tracker for the iPhone. It plans the weight and reps of every set, logs your workouts and charts your progress. Open it at https://jvhulst.github.io/Spotter/.
 
 ## Install
 
-Open the link in Safari, tap Share, then tap Add to Home Screen. From then on, open Spotter only from the home screen. The home-screen app keeps its own storage, so anything you log in a Safari tab does not appear there.
-
-## Using Spotter
-
-The Today tab shows the next training day of your split, which you choose at the top of that tab. A training day is a list of exercise slots, such as a squat slot or a row slot. Each slot keeps the exercise you last chose for it. Spotter rotates it to another exercise when it stalls or has run for 8 weeks, and the workout offers an Undo. You can also build templates of your own, which keep exactly the exercises you saved in them.
-
-Tap the star on an exercise's page in the Library to make it a favorite; squat, bench press and deadlift start out as favorites. A favorite takes every slot of its movement in the training days, the one starred last when several fit, and never rotates. A training day starts with a favorite when one fits it, and not with the one that started the last workout. The Library and Progress show your favorites first.
-
-Spotter plans each exercise from the first set of last time. Its weight, reps and reps in reserve give an estimate of your strength, and the next first set is the smallest step above it: one more rep, or the next weight step, whichever asks less. Later sets keep last time's drop in reps. Settings sets the rep range, target reps in reserve, rest and warm-up sets per category of exercise, and an exercise's page in the Library can set its own.
-
-| Category | Reps | Reps in reserve |
-| --- | --- | --- |
-| Barbell compounds | 5–8 | 1–2 |
-| Other compounds | 8–12 | 0–1 |
-| Isolations | 10–20 | 0–1 |
-
-In a workout, each set shows its planned weight and reps in gray. Type over them if you did something else, and tap the check mark to log the set. Logging starts the rest timer, which plays a sound when the rest is over while Spotter is open. When Spotter is in the background, a rest can also end with a notification, chosen in Settings.
-
-The Progress tab shows workouts per week, estimated one-rep maxes, bodyweight, volume and records. The Muscles tab shows your sets per muscle over the last 7 days, and the Library tab shows each exercise with its records, steps and photos.
+Open the link in Safari, tap Share, then tap Add to Home Screen. From then on, open Spotter from the home screen. It works offline there and keeps its own storage, separate from Safari.
 
 ## Your data
 
-Your data stays on your device, and neither the website nor this repository holds any of it. Export backup in Settings saves all data to one file. Settings also imports that file, an export from the Strong app (in Strong: Settings, Export Strong Data), or a CSV file of weigh-ins with the columns `date` (as 2025-12-21) and `kg`.
+Your data stays on your device unless you turn on Sync. Settings exports a backup, and imports a backup, a workout export from the Strong app or a CSV file of weigh-ins with the columns `date` and `kg`.
 
-The one exception is the optional Sync. It keeps a copy in a private GitHub repository of your own, so a lost phone loses nothing and your other devices stay in step. Spotter encrypts this copy on the device with your passphrase, so GitHub cannot read it, and without the passphrase nobody can decrypt it.
-
-To set up Sync, create a private repository on GitHub. Then create a fine-grained personal access token (on GitHub: Settings, Developer settings, Personal access tokens) with access to only that repository, and set its Contents permission to Read and write. In Spotter's Settings, enter the repository (for example `your-name/spotter-data`), the token and a passphrase of at least 12 characters. Do this first on the device that holds your workouts, then on your other devices with the same three entries.
+The optional Sync keeps an encrypted copy in a private GitHub repository of your own. Create that repository and a fine-grained personal access token with Contents read and write access to only that repository. Then enter the repository (as `owner/repository`), the token and a passphrase of at least 12 characters in Settings. Do this first on the device that holds your workouts, then on your other devices with the same three entries.
 
 ## Development
 
-The app is plain HTML, CSS and JavaScript modules without a build step. Run `python -m http.server 8765` in the folder that contains the repository folder and open `http://127.0.0.1:8765/<repository folder>/`. Open `tests/progression.html` on the same server to run the unit tests. A service worker caches the app for offline use, and a new value of `CACHE` in `sw.js` makes installed copies replace all cached files, so change it in every release. Sync encrypts with AES-GCM under a key derived from the passphrase with PBKDF2-SHA256 (600,000 iterations). The rest notifications come from a Cloudflare Worker in `push/`, which `python push/deploy.py` deploys.
+The app is plain HTML, CSS and JavaScript modules without a build step. To run it, run `python -m http.server 8765` in the folder that contains the repository folder and open `http://127.0.0.1:8765/<repository folder>/`. The tests run at `tests/progression.html` on the same server. Change the `CACHE` name in `sw.js` with every push to `main`, so installed copies fetch the new files.
 
-The exercises, movement patterns and splits are defined in `data/`. The exercise steps and photos come from the public-domain [free-exercise-db](https://github.com/yuhonas/free-exercise-db), and `python tools/build_cues.py` rebuilds `data/cues.json` and `img/ex/` from it.
+Rest-timer notifications come from a Cloudflare Worker in `push/`, which `python push/deploy.py` deploys.
+
+The exercise instructions and photos come from the public-domain [free-exercise-db](https://github.com/yuhonas/free-exercise-db). `python tools/build_cues.py` rebuilds them into `data/cues.json` and `img/ex/`.
