@@ -64,6 +64,10 @@ export const icon = {
   link: svg("M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"),
 };
 
+/** The button between two exercises that links them as a superset or unlinks them. `data` holds
+ *  the button's data attributes, among them its action. */
+export const linkButton = (on, data) => `<div class="link-btn"><button class="${on ? "on" : ""}" ${data}>${icon.link.replace("<svg", '<svg width="14" height="14" style="vertical-align:-2px"')} ${on ? "Superset" : "Make superset"}</button></div>`;
+
 /**
  * An in-app dialog in place of confirm() and prompt(), which some embedded pages block.
  * Resolves to true or false, or with `text` given, to the entered text or null.

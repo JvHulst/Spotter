@@ -16,10 +16,12 @@ import { alertMode, setAlertMode, pushSupported } from "../push.js";
 const ACCENTS = { red: "#d93d42", orange: "#cc420b", blue: "#2f6fe4", green: "#26883f" };
 const SOUND_CHOICES = { ...Object.fromEntries(Object.entries(SOUNDS).map(([id, s]) => [id, s.label])), off: "Off" };
 
-let status = null;
+/** The sync status of this device: undefined until read, null when sync is off, "unreadable" when
+ *  the stored settings could not be read, else as syncStatus gives it. */
+let status;
 
 export function settingsView() {
-  syncStatus().then((s) => {
+  syncStatus().catch(() => "unreadable").then((s) => {
     if (JSON.stringify(s) !== JSON.stringify(status)) {
       status = s;
       const el = document.getElementById("sync-card");
@@ -111,6 +113,13 @@ function alertCard() {
 }
 
 function syncCard() {
+  if (status === undefined) return `<div class="eyebrow">Sync</div><p class="small muted" style="margin:6px 0 0">Checking…</p>`;
+  if (status === "unreadable") {
+    return `
+      <div class="eyebrow">Sync</div>
+      <p class="small" style="margin:6px 0 0"><span class="mode-down">Spotter could not read its storage.</span> Close Spotter
+        completely (swipe it away in the app switcher) and open it again before you change anything here.</p>`;
+  }
   if (status) {
     const line = status.error ? `<span class="mode-down">Not synced: ${esc(status.error)}</span>`
       : status.last ? `Synced ${ago(new Date(status.last)) === "today" ? "today" : ago(new Date(status.last))}, ${new Date(status.last).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Not synced yet";

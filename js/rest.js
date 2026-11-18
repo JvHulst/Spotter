@@ -7,16 +7,7 @@ export const FINISHER_REST = { drop: 10, myo: 15 };
 
 const isOpen = (x) => !x.done;
 const hasOpenWork = (entry) => entry.sets.some((x) => isOpen(x) && !x.warmup);
-
-/** The first open set at or after entry `from`, wrapping around, as {e, s}, or null. */
-export function firstOpen(list, from = 0) {
-  for (let k = 0; k < list.length; k++) {
-    const e = (from + k) % list.length;
-    const s = list[e].sets.findIndex(isOpen);
-    if (s >= 0) return { e, s };
-  }
-  return null;
-}
+const openIn = (entry) => entry.sets.findIndex(isOpen);
 
 /** Index of the entry paired with entry e in a superset, or -1. */
 export function partnerIn(list, e) {
@@ -25,15 +16,46 @@ export function partnerIn(list, e) {
   return -1;
 }
 
+/** The two entries of the superset that holds entry e, first one first, or null. */
+function pairOf(list, e) {
+  const partner = partnerIn(list, e);
+  return partner < 0 ? null : [Math.min(e, partner), Math.max(e, partner)];
+}
+
+/** The first open warm-up of a superset, the first exercise's before the second's, as {e, s},
+ *  or null. Warm-ups of an exercise that has logged a working set are skipped ones. */
+function pairWarmup(list, pair) {
+  for (const e of pair) {
+    const sets = list[e].sets;
+    const s = sets.findIndex((x) => isOpen(x) && x.warmup);
+    if (s >= 0 && !sets.some((x) => x.done && !x.warmup)) return { e, s };
+  }
+  return null;
+}
+
+/** The first open set at or after entry `from`, wrapping around, as {e, s}, or null. In a
+ *  superset the open warm-ups of both exercises come first. */
+export function firstOpen(list, from = 0) {
+  for (let k = 0; k < list.length; k++) {
+    const e = (from + k) % list.length;
+    const s = openIn(list[e]);
+    if (s < 0) continue;
+    const pair = pairOf(list, e);
+    return (pair && pairWarmup(list, pair)) ?? { e, s };
+  }
+  return null;
+}
+
 /**
  * The set to log after set s of entry e (already marked done) and the rest before it, as
  * {focus, rest} with rest in seconds, or null when nothing is left. The rest follows the set that
  * comes next:
  *  - a finisher set follows its set directly, also inside a superset;
- *  - after a working or finisher set of a superset, the other exercise is next while it has open
- *    working sets, whatever its warm-ups: the short superset rest when going to the second
- *    exercise, and the longer of the two exercises' rests when returning to the first. Warm-ups
- *    of the other exercise before its first working set get the warm-up rest instead;
+ *  - a superset starts with the warm-ups of the first exercise, then those of the second, each
+ *    after the warm-up rest. The working sets then alternate between the two exercises with the
+ *    superset rest at every switch, starting with the exercise that has logged fewer working
+ *    sets. Once one exercise has no open sets, the other continues with its own rest between
+ *    its own sets;
  *  - otherwise the next open set of this exercise, or of the following ones: the warm-up rest
  *    before a warm-up, else the exercise's own rest, so also after its last warm-up.
  * `rests` is {warmup, superset, of(id)}.
@@ -44,12 +66,18 @@ export function afterSet(list, e, s, rests) {
   const next = entry.sets[s + 1];
   if (next && isOpen(next) && next.type) return { focus: { e, s: s + 1 }, rest: FINISHER_REST[next.type] };
 
-  const partner = partnerIn(list, e);
-  if (!set.warmup && partner >= 0 && hasOpenWork(list[partner])) {
-    const focus = { e: partner, s: list[partner].sets.findIndex(isOpen) };
-    const warming = list[partner].sets[focus.s].warmup;
-    const rest = warming ? rests.warmup : partner > e ? rests.superset : Math.max(rests.of(entry.ex), rests.of(list[partner].ex));
-    return { focus, rest };
+  const pair = pairOf(list, e);
+  if (pair) {
+    const warmup = pairWarmup(list, pair);
+    if (warmup) return { focus: warmup, rest: rests.warmup };
+    const open = pair.filter((i) => hasOpenWork(list[i]));
+    const logged = (i) => list[i].sets.filter((x) => x.done && !x.warmup && !x.type).length;
+    if (set.warmup && open.length) {
+      const first = open.reduce((a, b) => (logged(b) < logged(a) ? b : a));
+      return { focus: { e: first, s: openIn(list[first]) }, rest: rests.warmup };
+    }
+    const partner = pair[0] === e ? pair[1] : pair[0];
+    if (open.includes(partner)) return { focus: { e: partner, s: openIn(list[partner]) }, rest: rests.superset };
   }
 
   const focus = firstOpen(list, e);

@@ -18,7 +18,7 @@ import { WEEKLY_SETS_GUIDE } from "./muscles.js";
 import { logSet, undoSet, editSet, setEdited, setType, setWarmups, addSet, removeSet, removeExercise, swapExercise, addExercise, toggleSuperset,
   moveExercise, saveAsTemplate, updateTemplate, finishWorkout, discardWorkout, localIso, adaptive } from "../workout.js";
 import { isUntouched } from "../carry.js";
-import { actions, ask, cap, choose, dropdown, esc, fmtKg, ago, since, setsText, icon, toast } from "../ui.js";
+import { actions, ask, cap, choose, dropdown, esc, fmtKg, ago, since, setsText, icon, toast, linkButton } from "../ui.js";
 import { openSheet, closeSheet } from "./sheet.js";
 import { confetti } from "../confetti.js";
 import { exerciseOrigin } from "./library-view.js";
@@ -33,7 +33,7 @@ export function workoutView() {
     return { title: "", body: "" };
   }
   const list = a.exercises;
-  const cards = list.map((entry, e) => card(entry, e) + (e < list.length - 1 ? linkButton(e) : "")).join("");
+  const cards = list.map((entry, e) => card(entry, e) + (e < list.length - 1 ? supersetButton(e) : "")).join("");
   const weighed = state.weights[today()]?.kg;
   const body = `
     <label class="bw-row">
@@ -152,10 +152,7 @@ function gapCard() {
     </section>`;
 }
 
-function linkButton(e) {
-  const on = state.active.exercises[e].superset;
-  return `<div class="link-btn"><button class="${on ? "on" : ""}" data-action="superset" data-e="${e}">${icon.link.replace("<svg", '<svg width="14" height="14" style="vertical-align:-2px"')} ${on ? "Superset" : "Make superset"}</button></div>`;
-}
+const supersetButton = (e) => linkButton(state.active.exercises[e].superset, `data-action="superset" data-e="${e}"`);
 
 const setAt = ({ e, s }) => state.active.exercises[+e].sets[+s];
 /** Save an edit of a set; an edit of a logged set also replans the open sets after it. */

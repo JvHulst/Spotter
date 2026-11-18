@@ -421,6 +421,12 @@ body:has(.sheet-bg, .dropdown-bg) { overflow: hidden; }
 .card.proposal .btn { flex: none; }
 .tpl-row { display: block !important; padding: 8px 8px 10px 16px !important; }
 .tpl-row .row { gap: 6px; }
+.tpl-row.superset { border-left: 4px solid var(--accent); padding-left: 12px !important; }
+.list > .link-btn { margin: 0; padding: 4px 16px; }
+.list > .link-btn button:not(.on) { background: var(--surface-2); }
+.calc .stat, .calc .bw-row { background: var(--surface-2); }
+.calc .bw-row input { background: var(--surface); }
+.calc .stats { margin: 8px 0; }
 .tpl-opts { margin-top: 6px; flex-wrap: wrap; }
 .link-text { color: var(--accent-text); font-weight: 650; }
 .tpl-name { text-align: left; font-weight: 600; }
@@ -434,7 +440,6 @@ body:has(.sheet-bg, .dropdown-bg) { overflow: hidden; }
 .mini-stepper span { min-width: 18px; padding: 0 2px; text-align: center; font-weight: 700; font-size: 14px; }
 .weigh-form { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .weigh-form input { width: 100%; min-width: 0; }
-.muscle.minor .meter div { background: color-mix(in srgb, var(--chart) 65%, var(--surface-2)); }
 
 .toast {
   position: fixed; left: 50%; transform: translateX(-50%); z-index: 30;

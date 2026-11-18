@@ -10,6 +10,7 @@ import { template, rotation, dayPlan, targetFor, restFor, warmupFor, setTraining
   setSlotOption } from "./program.js";
 import { afterSet, firstOpen as firstOpenIn } from "./rest.js";
 import { carryDown } from "./carry.js";
+import { toggleLink, moveLinked, removeLinked } from "./reorder.js";
 import { restChanged } from "./push.js";
 
 export const suggestedTemplateId = () => nextTemplateId(rotation(), state.sessions);
@@ -169,12 +170,7 @@ export async function moveExercise(from, to) {
   if (from === to) return;
   const list = state.active.exercises;
   const focused = list[state.active.focus?.e];
-  const [entry] = list.splice(from, 1);
-  const prev = list[from - 1];
-  if (prev?.superset) prev.superset = false;
-  entry.superset = false;
-  list.splice(to, 0, entry);
-  if (list[to - 1]) list[to - 1].superset = false;
+  moveLinked(list, from, to);
   if (focused) state.active.focus.e = list.indexOf(focused);
   await storeSupersets();
   await saveActive();
@@ -188,8 +184,7 @@ export function addExercise(id) {
 
 export function removeExercise(e) {
   const list = state.active.exercises;
-  if (list[e - 1]?.superset && !list[e].superset) list[e - 1].superset = false;
-  list.splice(e, 1);
+  removeLinked(list, e);
   state.active.focus = list.length ? firstOpen(Math.min(e, list.length - 1)) : null;
   return saveActive();
 }
@@ -213,18 +208,10 @@ export function removeSet(e, s) {
   return saveActive();
 }
 
-/**
- * Link entry e with the next entry as a superset, or unlink it. A superset is a pair, so links
- * touching either exercise are removed first. The link is stored in the training day too.
- */
+/** Link entry e with the next entry as a superset, or unlink it (see toggleLink). The link is
+ *  stored in the training day too. */
 export async function toggleSuperset(e) {
-  const list = state.active.exercises;
-  const on = !list[e].superset;
-  if (on) {
-    if (list[e - 1]) list[e - 1].superset = false;
-    if (list[e + 1]) list[e + 1].superset = false;
-  }
-  list[e].superset = on;
+  toggleLink(state.active.exercises, e);
   await storeSupersets();
   await saveActive();
 }

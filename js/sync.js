@@ -133,7 +133,8 @@ export async function connect({ repo, token, passphrase }) {
 }
 
 export const disconnect = () => kv.delete("sync");
-export const syncStatus = () => kv.get("sync").then((cfg) => cfg && { repo: cfg.repo, last: cfg.last ?? null, error: cfg.error ?? null });
+/** The repository, the time of the last sync and its error, or null when sync is off. */
+export const syncStatus = () => kv.get("sync").then((cfg) => (cfg ? { repo: cfg.repo, last: cfg.last ?? null, error: cfg.error ?? null } : null));
 
 // --- Syncing -----------------------------------------------------------------------------
 

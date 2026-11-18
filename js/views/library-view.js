@@ -5,8 +5,8 @@ import { state, exercise, pattern, bodyweight, saveProgram } from "../state.js";
 import { exerciseCategory, CATEGORY_LABEL, favorites } from "../program.js";
 import { star, starMark } from "./star.js";
 import { trainingRows } from "./training.js";
-import { exerciseSeries, records } from "../history.js";
-import { loadFor } from "../progression.js";
+import { exerciseSeries, records, bestSet } from "../history.js";
+import { loadFor, repsFor, effectiveLoad } from "../progression.js";
 import { MUSCLES, MINOR_MUSCLES } from "../library.js";
 import { lineChart, compact, rangeStart, rangeChips } from "../charts.js";
 import { actions, esc, ago, cap, fmtDate, fmtKg, setsText } from "../ui.js";
@@ -61,7 +61,7 @@ export function exerciseView(id) {
       <div class="small muted">${esc(cap(e.muscle))} · ${esc(pattern(id).label.toLowerCase())} · ${esc(e.equipment)}</div>
       ${star(id)}
     </div>${cuesCard(id)}`;
-  const body = entries.length ? head + recordsCard(entries, e) + chartCard(entries, e) + repTable(entries, e) + targetsCard(id, e) + recentList(entries)
+  const body = entries.length ? head + recordsCard(entries, e) + calculatorCard(id, entries, e) + chartCard(entries, e) + repTable(entries, e) + targetsCard(id, e) + recentList(entries)
     : head + `<div class="empty">No sessions with this exercise yet</div>` + targetsCard(id, e);
   return { title: e.name, back: exerciseOrigin.back ?? "#library", body };
 }
@@ -97,6 +97,73 @@ function recordsCard(entries, e) {
       ${tile("Best session volume", `${compact(r.session.value)} kg`, when(r.session))}
       ${tile("Sessions", entries.length, `since ${fmtDate(entries[0].date, { month: "short", year: "numeric" })}`)}
     </div>`;
+}
+
+/** The estimated one-rep max now (the best of the last session) and at the peak (the best ever). */
+function strengths(entries, e) {
+  return { now: exerciseSeries(entries.slice(-1), e, bodyweight())[0].e1rm, peak: records(entries, e, bodyweight()).e1rm.value };
+}
+
+/** The calculator's typed values, which belong to one exercise and start from the best set of its
+ *  last session. `mode` is the value being typed: "kg" for reps at a weight, "reps" for the
+ *  weight for a number of reps. */
+function calcValues(id, entries) {
+  if (state.ui.calc?.id !== id) {
+    const best = bestSet(entries.at(-1).sets, exercise(id), bodyweight());
+    state.ui.calc = { id, mode: state.ui.calc?.mode ?? "kg", kg: String(best.kg ?? 0), reps: String(best.reps) };
+  }
+  return state.ui.calc;
+}
+
+/** The calculator's predictions from a one-rep max (Epley, as in progression.js): the reps to
+ *  failure at a logged weight kg, and the logged weight for `reps` reps to failure on the
+ *  exercise's weight steps, rounded toward the easier side so that the prediction is one you can
+ *  do. One rep is the estimated one-rep max itself, as in the rep records. */
+const repsAt = (oneRm, kg, e) => Math.floor(repsFor(oneRm, effectiveLoad(kg, e, bodyweight()), 0) + 1e-9);
+function weightFor(oneRm, reps, e) {
+  const load = reps === 1 ? oneRm : loadFor(oneRm, reps, 0);
+  const kg = e.load === "add" ? load - bodyweight() : e.load === "subtract" ? bodyweight() - load : load;
+  const steps = kg / e.increment;
+  return (e.load === "subtract" ? Math.ceil(steps - 1e-9) : Math.floor(steps + 1e-9)) * e.increment;
+}
+
+function calcResult(id) {
+  const e = exercise(id);
+  const entries = state.index.get(id);
+  const c = calcValues(id, entries);
+  const value = Number(String(c[c.mode]).replace(",", "."));
+  const valid = c.mode === "kg" ? Number.isFinite(value) && value >= 0 : Number.isInteger(value) && value >= 1 && value <= 30;
+  const show = (oneRm) => {
+    if (!valid) return "–";
+    if (c.mode === "reps") return `${fmtKg(Math.max(0, weightFor(oneRm, value, e)))} kg`;
+    const reps = repsAt(oneRm, value, e);
+    return reps < 1 ? "below 1 rep" : reps > 30 ? "30+ reps" : `${reps} ${reps === 1 ? "rep" : "reps"}`;
+  };
+  const { now, peak } = strengths(entries, e);
+  return `
+    <div class="stats two">
+      <div class="stat"><span>Now</span><b class="num">${show(now)}</b><span>1RM ${fmtKg(Math.round(now))} kg</span></div>
+      <div class="stat"><span>At your peak</span><b class="num">${show(peak)}</b><span>1RM ${fmtKg(Math.round(peak))} kg</span></div>
+    </div>`;
+}
+
+function calculatorCard(id, entries, e) {
+  if (!e.increment) return "";
+  const c = calcValues(id, entries);
+  const chip = (mode, label) => `<button class="chip small ${c.mode === mode ? "on" : ""}" data-action="calc-mode" data-v="${mode}">${label}</button>`;
+  const bw = e.load === "add" ? " Weights are the added weight." : e.load === "subtract" ? " Weights are the assistance." : "";
+  return `
+    <section class="card calc">
+      <div class="eyebrow">Calculator</div>
+      <div class="chips" style="margin-top:8px">${chip("kg", "Reps at a weight")}${chip("reps", "Weight for reps")}</div>
+      <label class="bw-row">
+        <span class="grow">${c.mode === "kg" ? "Weight" : "Reps"}</span>
+        <input class="num" inputmode="${c.mode === "kg" ? "decimal" : "numeric"}" value="${esc(c[c.mode])}" data-input="calc-input" data-id="${id}">
+        <span class="small muted">${c.mode === "kg" ? "kg" : "reps"}</span>
+      </label>
+      <div id="calc-out">${calcResult(id)}</div>
+      <p class="small muted" style="margin:0">Reps to failure, from your estimated one-rep max in your last session (now) and your best ever (peak).${bw}</p>
+    </section>`;
 }
 
 function chartCard(entries, e) {
@@ -171,6 +238,12 @@ actions["lib-muscle"] = ({ m }) => { state.ui.muscle = m; };
 actions["lib-search"] = (_, el) => {
   state.ui.libQuery = el.value;
   document.getElementById("lib-list").innerHTML = libraryList();
+  return "keep";
+};
+actions["calc-mode"] = ({ v }) => { state.ui.calc.mode = v; };
+actions["calc-input"] = ({ id }, el) => {
+  state.ui.calc[state.ui.calc.mode] = el.value;
+  document.getElementById("calc-out").innerHTML = calcResult(id);
   return "keep";
 };
 actions["ex-metric"] = ({ v }) => { state.ui.exMetric = v; };

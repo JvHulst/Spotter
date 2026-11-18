@@ -9,9 +9,9 @@ import { cleanProgram, trainingValue, warmupFor, builtinDays, dayPlan, template 
 import { state, cleanSettings, storedSettings } from "../js/state.js";
 import { parseCsv, csvKind, weighIns, strongSessions, splitWeighted } from "../js/strong.js";
 import { encrypt, decrypt, deriveKey, stable } from "../js/sync.js";
-import { afterSet } from "../js/rest.js";
+import { afterSet, firstOpen } from "../js/rest.js";
 import { carryDown, isUntouched } from "../js/carry.js";
-import { moveItem } from "../js/reorder.js";
+import { moveItem, toggleLink, moveLinked, removeLinked } from "../js/reorder.js";
 import { loadLibrary } from "../js/library.js";
 import { encryptPush, fromBase64 } from "../js/push.js";
 import pushServer, { Scheduler } from "../push/worker.js";
@@ -173,8 +173,10 @@ const wrong = await deriveKey("wrong horse battery", new Uint8Array(16));
 check("sync: a wrong passphrase fails", await decrypt(wrong, await encrypt(key, doc)).then(() => "read", () => "rejected"), "rejected");
 
 // rest: the set to log next and the rest before it. Sets are written as letters: w warm-up,
-// s working set, d drop set; a capital letter is a set already logged.
-const sets = (spec) => [...spec].map((c) => ({ ...(c.toLowerCase() === "w" ? { warmup: true } : {}), ...(c.toLowerCase() === "d" ? { type: "drop" } : {}), done: c === c.toUpperCase() }));
+// s working set, d drop set, m myo-reps mini-set; a capital letter is a set already logged.
+const TYPES = { d: "drop", m: "myo" };
+const sets = (spec) => [...spec].map((c) => ({ ...(c.toLowerCase() === "w" ? { warmup: true } : {}),
+  ...(TYPES[c.toLowerCase()] ? { type: TYPES[c.toLowerCase()] } : {}), done: c === c.toUpperCase() }));
 const entries = (...specs) => specs.map(([spec, superset = false], i) => ({ ex: "ab"[i] ?? "c", superset, sets: sets(spec) }));
 const rests = { warmup: 60, superset: 45, of: (id) => ({ a: 90, b: 120, c: 120 })[id] };
 const after = (list, e, s) => afterSet(list, e, s, rests);
@@ -186,12 +188,22 @@ check("rest: after the last working set, the next exercise's working set takes t
 check("rest: nothing left", after(entries(["S"]), 0, 0), null);
 check("rest: a drop set follows at once", after(entries(["Sd"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 10 });
 check("superset: the first exercise hands over after the short rest", after(entries(["Ss", true], ["ss"]), 0, 0), { focus: { e: 1, s: 0 }, rest: 45 });
-check("superset: the second exercise hands back after the longer rest", after(entries(["Ss", true], ["Ss"]), 1, 0), { focus: { e: 0, s: 1 }, rest: 120 });
+check("superset: the second exercise hands back after the short rest", after(entries(["Ss", true], ["Ss"]), 1, 0), { focus: { e: 0, s: 1 }, rest: 45 });
 check("superset: a drop set stays with its exercise", after(entries(["Sds", true], ["ss"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 10 });
 check("superset: after the drop set the other exercise follows", after(entries(["SDs", true], ["ss"]), 0, 1), { focus: { e: 1, s: 0 }, rest: 45 });
-check("superset: the other exercise's warm-ups come first, with the warm-up rest", after(entries(["Ss", true], ["wws"]), 0, 0), { focus: { e: 1, s: 0 }, rest: 60 });
-check("superset: a warm-up does not hand over", after(entries(["Ws", true], ["ws"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 90 });
-check("superset: an exhausted partner leaves the exercise to continue", after(entries(["Ss", true], ["S"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 90 });
+check("superset: myo-reps follow the last set, also of the second exercise", after(entries(["SS", true], ["SSmm"]), 1, 1), { focus: { e: 1, s: 2 }, rest: 15 });
+check("superset: after the last myo-reps set the other exercise follows", after(entries(["SSMMM", true], ["Ss"]), 0, 4), { focus: { e: 1, s: 1 }, rest: 45 });
+check("superset: the first exercise's warm-ups, then the second's", after(entries(["Wws", true], ["wws"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 60 });
+check("superset: from the first exercise's last warm-up to the second's warm-ups", after(entries(["WWs", true], ["wws"]), 0, 1), { focus: { e: 1, s: 0 }, rest: 60 });
+check("superset: after all warm-ups the first exercise starts, with the warm-up rest", after(entries(["WWs", true], ["WWs"]), 1, 1), { focus: { e: 0, s: 2 }, rest: 60 });
+check("superset: only the second exercise warms up, then the first starts", after(entries(["ss", true], ["Wws"]), 1, 0), { focus: { e: 1, s: 1 }, rest: 60 });
+check("superset: the workout starts with the second exercise's warm-ups", firstOpen(entries(["ss", true], ["ws"])), { e: 1, s: 0 });
+check("superset: warm-ups of the second exercise after the first one's working set come next", after(entries(["Ss", true], ["ws"]), 0, 0), { focus: { e: 1, s: 0 }, rest: 60 });
+check("superset: then the exercise with fewer working sets", after(entries(["Ss", true], ["Ws"]), 1, 0), { focus: { e: 1, s: 1 }, rest: 60 });
+check("superset: a skipped warm-up is left behind", after(entries(["wSs", true], ["ss"]), 0, 1), { focus: { e: 1, s: 0 }, rest: 45 });
+check("superset: an exhausted partner leaves the exercise to continue with its own rest", after(entries(["Ss", true], ["S"]), 0, 0), { focus: { e: 0, s: 1 }, rest: 90 });
+check("superset: a longer exercise gets its last set after the short rest", after(entries(["SSSs", true], ["SSS"]), 1, 2), { focus: { e: 0, s: 3 }, rest: 45 });
+check("superset: after the pair, the next exercise", after(entries(["SS", true], ["SS"], ["s"]), 1, 1), { focus: { e: 2, s: 0 }, rest: 120 });
 
 // carry: a typed value runs down the untouched working sets
 const four = () => Array.from({ length: 4 }, () => ({ kg: 80, planKg: 80, reps: 8, planReps: 8 }));
@@ -235,6 +247,20 @@ const moved = (list, from, to) => (moveItem(list, from, to), list);
 check("moveItem: forward", moved([1, 2, 3, 4], 0, 2), [2, 3, 1, 4]);
 check("moveItem: backward", moved([1, 2, 3, 4], 3, 1), [1, 4, 2, 3]);
 check("moveItem: same place", moved([1, 2, 3], 1, 1), [1, 2, 3]);
+
+// links: a list written as names, with "+" after a name linked to the next one
+const linked = (spec) => spec.split(" ").map((x) => ({ n: x.replace("+", ""), superset: x.endsWith("+") }));
+const show = (list) => list.map((x) => x.n + (x.superset ? "+" : "")).join(" ");
+const after2 = (spec, f) => { const list = linked(spec); f(list); return show(list); };
+check("links: linking pairs an exercise with the next one", after2("a b c", (l) => toggleLink(l, 1)), "a b+ c");
+check("links: a new link replaces the links touching either exercise", after2("a+ b c+ d", (l) => toggleLink(l, 1)), "a b+ c d");
+check("links: the last exercise cannot link", after2("a b", (l) => toggleLink(l, 1)), "a b");
+check("links: swapping the two exercises of a superset keeps it", after2("x a+ b y", (l) => moveLinked(l, 2, 1)), "x b+ a y");
+check("links: swapping them the other way keeps it too", after2("a+ b y", (l) => moveLinked(l, 0, 1)), "b+ a y");
+check("links: moving one exercise out of a superset breaks it", after2("a+ b y", (l) => moveLinked(l, 1, 2)), "a y b");
+check("links: moving an exercise into a superset breaks it", after2("a+ b y", (l) => moveLinked(l, 2, 1)), "a y b");
+check("links: moving past a superset keeps it", after2("y a+ b", (l) => moveLinked(l, 0, 2)), "a+ b y");
+check("links: removing an exercise of a superset breaks it", after2("a+ b y", (l) => removeLinked(l, 1)), "a y");
 
 {
   const library = await loadLibrary();

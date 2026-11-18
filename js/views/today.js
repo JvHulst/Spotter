@@ -8,8 +8,8 @@ import { template, splits, activeSplit, rotation, dayPlan, ownTemplate, createTe
   forkDay, resetDay, FINISHERS, FINISHER_LABEL } from "../program.js";
 import { suggestedTemplateId, planFor, startWorkout } from "../workout.js";
 import { sessionsWithin } from "../history.js";
-import { actions, ask, choose, esc, fmtKg, since, modeBadge, icon } from "../ui.js";
-import { moveItem } from "../reorder.js";
+import { actions, ask, choose, esc, fmtKg, since, modeBadge, icon, linkButton } from "../ui.js";
+import { moveLinked, removeLinked, toggleLink } from "../reorder.js";
 import { openSheet, closeSheet } from "./sheet.js";
 import { starMark } from "./star.js";
 
@@ -123,12 +123,13 @@ actions["edit-workout"] = async ({ id }) => {
   location.hash = `#template-${id}`;
 };
 
-/** Editor of one of the user's templates: name, exercises with their sets, and order. */
+/** Editor of one of the user's templates: name, exercises with their sets and finishers,
+ *  supersets, and order. */
 export function templateView(id) {
   const t = ownTemplate(id);
   if (!t) return { title: "Template", back: "#today", body: `<div class="empty">Template not found</div>` };
   const rows = t.slots.map((slot, i) => `
-    <div class="tpl-row">
+    <div class="tpl-row ${slot.superset || t.slots[i - 1]?.superset ? "superset" : ""}">
       <div class="row">
         <button class="grip" data-drag=".tpl-row" data-drag-action="tpl-move" data-id="${id}" aria-label="Drag to reorder">${icon.grip}</button>
         ${starMark(slot.ex)}
@@ -143,7 +144,7 @@ export function templateView(id) {
         </div>
         <button class="chip small ${slot.finisher ? "on" : ""}" data-action="tpl-finisher" data-id="${id}" data-i="${i}">${slot.finisher ? FINISHER_LABEL[slot.finisher] : "No finisher"}</button>
       </div>
-    </div>`).join("");
+    </div>${i < t.slots.length - 1 ? linkButton(slot.superset, `data-action="tpl-superset" data-id="${id}" data-i="${i}"`) : ""}`).join("");
   const body = `
     <div class="field-label">Name</div>
     <input class="search" value="${esc(t.name)}" data-change="tpl-name" data-id="${id}">
@@ -193,12 +194,16 @@ actions["tpl-finisher"] = ({ id, i }) => {
   slot.finisher = FINISHERS[(FINISHERS.indexOf(slot.finisher ?? "") + 1) % FINISHERS.length];
   return saveProgram();
 };
+actions["tpl-superset"] = ({ id, i }) => {
+  toggleLink(ownTemplate(id).slots, +i);
+  return saveProgram();
+};
 actions["tpl-move"] = ({ id, from, to }) => {
-  moveItem(ownTemplate(id).slots, +from, +to);
+  moveLinked(ownTemplate(id).slots, +from, +to);
   return saveProgram();
 };
 actions["tpl-remove"] = ({ id, i }) => {
-  ownTemplate(id).slots.splice(+i, 1);
+  removeLinked(ownTemplate(id).slots, +i);
   return saveProgram();
 };
 actions["tpl-add"] = ({ id }) => openSheet({

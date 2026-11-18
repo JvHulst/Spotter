@@ -12,6 +12,43 @@ export function moveItem(list, from, to) {
   list.splice(to, 0, ...list.splice(from, 1));
 }
 
+// Superset links in a list of exercises: an item with `superset` set pairs with the next item.
+// A superset is a pair, so an item takes part in at most one link.
+
+/** Link item i with the next item as a superset, or unlink it. Links touching either item are
+ *  removed first. */
+export function toggleLink(list, i) {
+  const on = !list[i].superset && Boolean(list[i + 1]);
+  if (on) {
+    if (list[i - 1]) list[i - 1].superset = false;
+    list[i + 1].superset = false;
+  }
+  list[i].superset = on;
+}
+
+/** Move an item as moveItem does. Swapping the two exercises of a superset keeps them linked;
+ *  any other move removes the links that it would split or tangle. */
+export function moveLinked(list, from, to) {
+  if (from === to) return;
+  const first = Math.min(from, to);
+  if (Math.abs(from - to) === 1 && list[first].superset) {
+    moveItem(list, from, to);
+    list[first].superset = true;
+    list[first + 1].superset = false;
+    return;
+  }
+  if (list[from - 1]?.superset) list[from - 1].superset = false;
+  list[from].superset = false;
+  moveItem(list, from, to);
+  if (list[to - 1]) list[to - 1].superset = false;
+}
+
+/** Remove item i, together with the link of the item before it. */
+export function removeLinked(list, i) {
+  if (list[i - 1]?.superset) list[i - 1].superset = false;
+  list.splice(i, 1);
+}
+
 /**
  * Start dragging the item of grip. onDrop(from, to) runs once the pointer is released, also when
  * the item ended where it began. A cancelled gesture puts the item back and reports nothing.

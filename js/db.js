@@ -5,6 +5,7 @@
 const DB_NAME = "spotter";
 let opened;
 
+/** The open database. A connection that the browser closes is opened again on the next use. */
 function open() {
   opened ??= new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 1);
@@ -12,20 +13,42 @@ function open() {
       req.result.createObjectStore("kv");
       req.result.createObjectStore("sessions", { keyPath: "id" });
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const db = req.result;
+      db.onclose = () => { opened = null; };
+      db.onversionchange = () => { db.close(); opened = null; };
+      resolve(db);
+    };
+    req.onerror = () => {
+      opened = null;
+      reject(req.error);
+    };
   });
   return opened;
 }
 
-async function run(store, mode, fn) {
+/** Errors of a lost connection. iOS drops the connection of a web app that was in the background
+ *  ("Connection to Indexed Database server lost"), without a close event. */
+const LOST = new Set(["InvalidStateError", "UnknownError"]);
+
+/** Run fn on a store in one transaction and resolve with its request's result. A transaction on
+ *  a lost connection runs once more on a new connection. */
+async function run(store, mode, fn, retry = true) {
   const db = await open();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(store, mode);
-    const result = fn(tx.objectStore(store));
-    tx.oncomplete = () => resolve(result instanceof IDBRequest ? result.result : result);
-    tx.onerror = () => reject(tx.error);
-  });
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(store, mode);
+      const result = fn(tx.objectStore(store));
+      tx.oncomplete = () => resolve(result instanceof IDBRequest ? result.result : result);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error ?? new DOMException("Transaction aborted", "AbortError"));
+    });
+  } catch (err) {
+    if (!retry || !LOST.has(err?.name)) throw err;
+    if (opened) (await opened.catch(() => null))?.close();
+    opened = null;
+    return run(store, mode, fn, false);
+  }
 }
 
 export const kv = {
